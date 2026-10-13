@@ -200,3 +200,22 @@ export const SHOT_STRONG_SPEED = 15;
 
 /** Raio desenhado da bola (m): maior que o físico para ser legível na tela. */
 export const BALL_VISUAL_RADIUS = 0.2;
+
+// ---------------------------------------------------------------------------
+// Partida (tempos em segundos)
+// ---------------------------------------------------------------------------
+
+/** Duração de cada tempo normal. */
+export const HALF_DURATION = 90;
+/** Duração de cada tempo da prorrogação. */
+export const EXTRA_HALF_DURATION = 30;
+/** Contagem antes de liberar a saída de bola. */
+export const KICKOFF_DELAY = 1;
+/** Duração dos cartões de intertítulo (intervalo, prorrogação, pênaltis, fim). */
+export const INTERTITLE_DURATION = 2;
+/** Duração da comemoração de gol. */
+export const GOAL_CELEBRATION_DURATION = 3;
+/** A partir deste tempo da comemoração, o botão de passe pula para a saída de bola. */
+export const GOAL_CELEBRATION_SKIP_AFTER = 1;
+/** Distância do centro em que o atacante do time que não sai fica na saída de bola. */
+export const KICKOFF_DEFENDER_DISTANCE = 3.6;

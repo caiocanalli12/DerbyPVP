@@ -11,24 +11,30 @@ import {
 import { keyboard } from '../core/input';
 import type { InputFrame } from '../core/input';
 import { DEPTH_UI, PPM, project } from '../core/projection';
-import { BallView } from '../render/BallView';
 import { audio } from '../audio/AudioManager';
-import { FieldView } from '../render/FieldView';
+import { BallView } from '../render/BallView';
 import { DebugOverlay } from '../render/DebugOverlay';
+import { FieldView } from '../render/FieldView';
 import { PlayersView } from '../render/PlayersView';
-import { createWorld, drainEvents, getPlayer, stepWorld } from '../sim/world';
-import type { World } from '../sim/world';
-import { CREAM_CSS, FONT_TITLE, INK_CSS } from '../art/style';
+import { createMatch, drainMatchEvents, formatClock, PERIOD_LABEL, stepMatch } from '../sim/match';
+import type { Match } from '../sim/match';
+import { drainEvents, getPlayer } from '../sim/world';
+import { CREAM_CSS, FONT_TEXT, FONT_TITLE, INK_CSS } from '../art/style';
 
 /**
- * Partida. Fase 3: dois humanos movendo jogadores ao mesmo tempo, em passo fixo.
+ * Partida: laço de passo fixo, espelhamento da simulação e interface provisória.
  */
 export class MatchScene extends Phaser.Scene {
-  private world!: World;
+  private match!: Match;
   private debug!: DebugOverlay;
   private playersView!: PlayersView;
   private ballView!: BallView;
   private chargeBar!: Phaser.GameObjects.Graphics;
+  private scoreText!: Phaser.GameObjects.Text;
+  private clockText!: Phaser.GameObjects.Text;
+  private cardBg!: Phaser.GameObjects.Rectangle;
+  private cardText!: Phaser.GameObjects.Text;
+  private bannerText!: Phaser.GameObjects.Text;
   private pauseText!: Phaser.GameObjects.Text;
   private accumulator = 0;
   private paused = false;
@@ -38,15 +44,51 @@ export class MatchScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.world = createWorld();
+    this.match = createMatch(Date.now() >>> 0);
     this.accumulator = 0;
     this.paused = false;
+    const world = this.match.world;
 
     new FieldView(this);
-    this.playersView = new PlayersView(this, this.world);
+    this.playersView = new PlayersView(this, world);
     this.ballView = new BallView(this);
     this.chargeBar = this.add.graphics().setDepth(DEPTH_UI - 10);
     this.debug = new DebugOverlay(this);
+
+    // Placar simples (o placar de TV vem na fase 12).
+    const style = { fontFamily: FONT_TEXT, color: CREAM_CSS, stroke: INK_CSS, strokeThickness: 6 };
+    this.scoreText = this.add
+      .text(GAME_WIDTH / 2, 18, '', { ...style, fontSize: '40px', fontStyle: '700' })
+      .setOrigin(0.5, 0)
+      .setDepth(DEPTH_UI);
+    this.clockText = this.add
+      .text(GAME_WIDTH / 2, 68, '', { ...style, fontSize: '24px' })
+      .setOrigin(0.5, 0)
+      .setDepth(DEPTH_UI);
+
+    // Cartão de intertítulo simples (o estilo cinema mudo vem na fase 12).
+    this.cardBg = this.add
+      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x14100c, 0.92)
+      .setDepth(DEPTH_UI + 10)
+      .setVisible(false);
+    this.cardText = this.add
+      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2, '', {
+        fontFamily: FONT_TITLE,
+        fontSize: '64px',
+        color: CREAM_CSS,
+        align: 'center',
+        wordWrap: { width: GAME_WIDTH - 160 },
+      })
+      .setOrigin(0.5)
+      .setDepth(DEPTH_UI + 11)
+      .setVisible(false);
+
+    // Faixa de avisos (gol, saída de bola).
+    this.bannerText = this.add
+      .text(GAME_WIDTH / 2, 200, '', { ...style, fontFamily: FONT_TITLE, fontSize: '96px', strokeThickness: 12 })
+      .setOrigin(0.5)
+      .setDepth(DEPTH_UI + 5)
+      .setVisible(false);
 
     this.pauseText = this.add
       .text(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'PAUSADO', {
@@ -57,7 +99,7 @@ export class MatchScene extends Phaser.Scene {
         strokeThickness: 10,
       })
       .setOrigin(0.5)
-      .setDepth(DEPTH_UI)
+      .setDepth(DEPTH_UI + 20)
       .setVisible(false);
 
     // Descarta teclas apertadas antes da cena começar.
@@ -86,45 +128,20 @@ export class MatchScene extends Phaser.Scene {
           this.accumulator = 0;
           break;
         }
-        stepWorld(this.world, frame.players, SIM_DT);
+        stepMatch(this.match, frame.players, SIM_DT);
         this.accumulator -= SIM_DT;
       }
     }
 
     this.consumeEvents();
 
+    const world = this.match.world;
     const alpha = this.paused ? 1 : this.accumulator / SIM_DT;
-    this.playersView.update(this.world, alpha);
-    this.ballView.update(this.world.ball, alpha);
+    this.playersView.update(world, alpha);
+    this.ballView.update(world.ball, alpha);
     this.drawChargeBars();
+    this.drawHud();
     this.drawDebug();
-  }
-
-  /** Eventos da simulação -> áudio (vazio por enquanto) e efeitos. */
-  private consumeEvents(): void {
-    for (const e of drainEvents(this.world)) {
-      if (e.type === 'pass') audio.play('passe');
-      else if (e.type === 'shot') audio.play('chute');
-      else if (e.type === 'contact' && (e.kind === 'post' || e.kind === 'bar')) audio.play('trave');
-    }
-  }
-
-  /** Barra de força provisória aos pés de quem carrega (o arco final vem na fase 12). */
-  private drawChargeBars(): void {
-    const g = this.chargeBar;
-    g.clear();
-    for (const team of [0, 1] as const) {
-      const h = this.world.humans[team];
-      if (!h.charging) continue;
-      const p = getPlayer(this.world, this.world.controlled[team]);
-      const pos = project(p.x, p.y + 0.6, 0);
-      const w = 1.4 * PPM * pos.scale;
-      const x0 = pos.x - w / 2;
-      g.fillStyle(0x1a1410, 1);
-      g.fillRect(x0 - 2, pos.y - 2, w + 4, 10);
-      g.fillStyle(h.charge >= 1 && Math.floor(this.time.now / 80) % 2 === 0 ? 0xffffff : 0xffcc33, 1);
-      g.fillRect(x0, pos.y, w * h.charge, 6);
-    }
   }
 
   private handleGlobalKeys(frame: InputFrame): void {
@@ -138,20 +155,79 @@ export class MatchScene extends Phaser.Scene {
     this.pauseText.setVisible(paused);
   }
 
+  /** Eventos da simulação -> áudio (vazio por enquanto) e efeitos. */
+  private consumeEvents(): void {
+    for (const e of drainEvents(this.match.world)) {
+      if (e.type === 'pass') audio.play('passe');
+      else if (e.type === 'shot') audio.play('chute');
+      else if (e.type === 'contact' && (e.kind === 'post' || e.kind === 'bar')) audio.play('trave');
+    }
+    for (const e of drainMatchEvents(this.match)) {
+      if (e.type === 'whistle') audio.play('apito');
+      else if (e.type === 'finalWhistle' || e.type === 'periodEnd') audio.play('apito-final');
+      else if (e.type === 'goal') audio.play('gol');
+    }
+  }
+
+  private drawHud(): void {
+    const m = this.match;
+    this.scoreText.setText(`J1  ${m.score[0]}  x  ${m.score[1]}  J2`);
+    this.clockText.setText(m.phase === 'PENALTIS' ? 'PÊN' : `${PERIOD_LABEL[m.period]} ${formatClock(m.clock)}`);
+
+    const showCard = m.intertitle !== null;
+    this.cardBg.setVisible(showCard);
+    this.cardText.setVisible(showCard);
+    if (showCard) {
+      this.cardText.setText(m.phase === 'PENALTIS' ? 'PÊNALTIS\n(disputa na fase 9)' : (m.intertitle ?? ''));
+    }
+
+    if (m.phase === 'COMEMORACAO_GOL') {
+      this.bannerText.setText('GOOOL!').setVisible(true);
+    } else if (m.phase === 'SAIDA_DE_BOLA') {
+      this.bannerText.setText(m.kickoffTeam === 0 ? 'SAÍDA: J1' : 'SAÍDA: J2').setVisible(true);
+    } else {
+      this.bannerText.setVisible(false);
+    }
+  }
+
+  /** Barra de força provisória aos pés de quem carrega (o arco final vem na fase 12). */
+  private drawChargeBars(): void {
+    const g = this.chargeBar;
+    g.clear();
+    const world = this.match.world;
+    for (const team of [0, 1] as const) {
+      const h = world.humans[team];
+      if (!h.charging) continue;
+      const p = getPlayer(world, world.controlled[team]);
+      const pos = project(p.x, p.y + 0.6, 0);
+      const w = 1.4 * PPM * pos.scale;
+      const x0 = pos.x - w / 2;
+      g.fillStyle(0x1a1410, 1);
+      g.fillRect(x0 - 2, pos.y - 2, w + 4, 10);
+      g.fillStyle(h.charge >= 1 && Math.floor(this.time.now / 80) % 2 === 0 ? 0xffffff : 0xffcc33, 1);
+      g.fillRect(x0, pos.y, w * h.charge, 6);
+    }
+  }
+
   private drawDebug(): void {
     this.debug.beginFrame();
     if (this.debug.isVisible()) {
-      for (const p of this.world.players) {
+      const world = this.match.world;
+      for (const p of world.players) {
         const color = p.team === 0 ? 0xff8080 : 0x80b0ff;
         this.debug.circle(p.x, p.y, PLAYER_RADIUS, color);
-        this.debug.label(p.x, p.y + 0.9, `${p.number} (${p.x.toFixed(1)}, ${p.y.toFixed(1)}) ${Math.hypot(p.vx, p.vy).toFixed(1)}m/s`);
+        this.debug.label(
+          p.x,
+          p.y + 0.9,
+          `${p.number} (${p.x.toFixed(1)}, ${p.y.toFixed(1)}) ${Math.hypot(p.vx, p.vy).toFixed(1)}m/s`,
+        );
       }
-      const b = this.world.ball;
+      const b = world.ball;
       this.debug.circle(b.x, b.y, BALL_RADIUS, 0xffffff);
       this.debug.circle(b.x, b.y, BALL_RADIUS, 0xffffff, b.z);
       this.debug.pillar(b.x, b.y, 0, b.z, 0xffffff);
       for (const team of [0, 1] as const) {
-        const c = getPlayer(this.world, this.world.controlled[team]);
+        const c = getPlayer(world, world.controlled[team]);
         this.debug.circle(c.x, c.y, POSSESSION_RADIUS, 0x40ff40);
       }
       this.debug.label(
@@ -160,7 +236,9 @@ export class MatchScene extends Phaser.Scene {
         `bola (${b.x.toFixed(2)}, ${b.y.toFixed(2)}, z ${b.z.toFixed(2)}) ${Math.hypot(b.vx, b.vy, b.vz).toFixed(1)}m/s`,
         b.z,
       );
-      this.debug.setInfo(`DEBUG · t=${this.world.time.toFixed(1)}s · mouse = coordenadas do mundo no chão`);
+      this.debug.setInfo(
+        `DEBUG · ${this.match.phase} · t=${world.time.toFixed(1)}s · J1 defende ${world.defends[0] === 0 ? 'esq' : 'dir'}`,
+      );
     }
     this.debug.endFrame();
   }
