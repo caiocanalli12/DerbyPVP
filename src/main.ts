@@ -5,6 +5,7 @@ import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from './config/constants';
 import { FONT_TEXT, FONT_TITLE } from './art/style';
 import { BootScene } from './scenes/BootScene';
+import { MatchScene } from './scenes/MatchScene';
 
 /** Força o download das fontes empacotadas e espera ficarem prontas. */
 async function loadFonts(): Promise<void> {
@@ -43,7 +44,7 @@ async function start(): Promise<void> {
     input: {
       keyboard: false,
     },
-    scene: [BootScene],
+    scene: [BootScene, MatchScene],
   });
 }
 
