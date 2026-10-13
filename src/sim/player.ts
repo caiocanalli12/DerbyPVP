@@ -40,6 +40,10 @@ export interface Player {
   moveY: number;
   /** Velocidade máxima neste passo (m/s). */
   maxSpeed: number;
+  /** Tempo (s) em que não pode tocar na bola (depois de passar ou chutar). */
+  noTouchTimer: number;
+  /** Fase do balanço de condução (rad). */
+  dribblePhase: number;
 }
 
 export function createPlayer(id: number, team: TeamIndex, role: Role): Player {
@@ -58,6 +62,8 @@ export function createPlayer(id: number, team: TeamIndex, role: Role): Player {
     moveX: 0,
     moveY: 0,
     maxSpeed: PLAYER_RUN_SPEED,
+    noTouchTimer: 0,
+    dribblePhase: 0,
   };
 }
 

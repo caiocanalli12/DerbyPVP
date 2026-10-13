@@ -97,3 +97,106 @@ export const FORMATION = {
   ALA_D: { x: 15, y: 16 },
   ATA: { x: 18.5, y: 10 },
 } as const;
+
+// ---------------------------------------------------------------------------
+// Bola
+// ---------------------------------------------------------------------------
+
+export const BALL_RADIUS = 0.11;
+/** Amortecimento exponencial rolando: v *= exp(-k * dt). */
+export const BALL_ROLL_DAMPING = 1.1;
+/** Abaixo disso (rolando), a bola para. */
+export const BALL_STOP_SPEED = 0.15;
+/** Gravidade (valor de jogo, mais arcade). */
+export const GRAVITY = 20;
+/** Restituição do quique no chão. */
+export const BALL_GROUND_RESTITUTION = 0.5;
+/** Abaixo desta velocidade vertical (m/s) o quique acaba e a bola passa a rolar. */
+export const BALL_MIN_BOUNCE_VZ = 1.0;
+/** Restituição em paredes, postes e travessão. */
+export const BALL_WALL_RESTITUTION = 0.7;
+/** Restituição na rede (absorve quase tudo). */
+export const BALL_NET_RESTITUTION = 0.1;
+/** Fração da velocidade que sobra (em todas as direções) ao tocar a rede. */
+export const BALL_NET_FRICTION = 0.4;
+/** Restituição ao bater no corpo de um jogador. */
+export const BALL_BODY_RESTITUTION = 0.35;
+/** Deslocamento máximo da bola por subpasso de física (evita atravessar postes). */
+export const BALL_MAX_SUBSTEP_DIST = 0.05;
+
+// ---------------------------------------------------------------------------
+// Posse e condução
+// ---------------------------------------------------------------------------
+
+/** Distância máxima (dos pés à bola) para ganhar a posse. */
+export const POSSESSION_RADIUS = 0.6;
+/** Altura máxima da bola para dominar. */
+export const POSSESSION_MAX_Z = 0.5;
+/** Velocidade relativa máxima para dominar; acima disso a bola desvia. */
+export const POSSESSION_MAX_REL_SPEED = 9;
+/** Distância da bola à frente do jogador ao conduzir. */
+export const DRIBBLE_OFFSET = 0.45;
+/** Balanço da condução: para a frente/para trás (m) e para o lado (m). */
+export const DRIBBLE_TOUCH_AMPLITUDE = 0.07;
+export const DRIBBLE_SIDE_AMPLITUDE = 0.04;
+/** Metros percorridos por ciclo de toque na bola. */
+export const DRIBBLE_STRIDE = 1.3;
+/** Tempo sem poder recuperar a bola depois de passar ou chutar (s). */
+export const KICK_REGAIN_COOLDOWN = 0.25;
+/** Depois de a bola desviar no corpo, o jogador não a domina por este tempo (s). */
+export const DEFLECT_NO_TOUCH = 0.2;
+
+// ---------------------------------------------------------------------------
+// Passe
+// ---------------------------------------------------------------------------
+
+/** Abertura total do cone de busca de companheiro (graus). */
+export const PASS_CONE_DEG = 60;
+/** Pontuação do alvo = ângulo (graus) * peso + distância (m) * peso; menor vence. */
+export const PASS_ANGLE_WEIGHT = 1.0;
+export const PASS_DIST_WEIGHT = 0.35;
+/** Velocidade do passe = base + porMetro * distância, limitada a [mín, máx]. */
+export const PASS_SPEED_BASE = 4.5;
+export const PASS_SPEED_PER_METER = 1.1;
+export const PASS_MIN_SPEED = 7;
+export const PASS_MAX_SPEED = 16;
+/** Antecipação máxima (m) à frente de um receptor que está correndo. */
+export const PASS_MAX_LEAD = 3;
+/** Velocidade do toque reto quando não há companheiro no cone. */
+export const PASS_NO_TARGET_SPEED = 9;
+/** Por quanto tempo (s, além do tempo de voo estimado) o receptor fica "reservado" para o controle. */
+export const PASS_RECEIVER_LOCK_EXTRA = 0.6;
+
+// ---------------------------------------------------------------------------
+// Chute
+// ---------------------------------------------------------------------------
+
+/** Tempo para carregar de 0 a 100% (s). */
+export const SHOT_CHARGE_TIME = 0.9;
+export const SHOT_MIN_SPEED = 9;
+export const SHOT_MAX_SPEED = 24;
+/** Se o direcional estiver a até este ângulo do gol, aplica a correção. */
+export const SHOT_ASSIST_MAX_ANGLE_DEG = 45;
+/** Fração da correção em direção à boca do gol. */
+export const SHOT_ASSIST_STRENGTH = 0.25;
+/** Margem (m) dentro dos postes usada como alvo da correção. */
+export const SHOT_ASSIST_POST_MARGIN = 0.25;
+/** A partir desta carga o chute sobe. */
+export const SHOT_LOFT_START = 0.5;
+/** vz (m/s) com 100% de carga, sem a imprecisão. */
+export const SHOT_MAX_VZ = 5.5;
+/** A partir desta carga entra a imprecisão aleatória. */
+export const SHOT_INACCURACY_START = 0.85;
+/** Erro angular horizontal máximo (graus) com 100% de carga. */
+export const SHOT_MAX_ERROR_DEG = 10;
+/** Erro vertical máximo (m/s em vz) com 100% de carga. */
+export const SHOT_MAX_EXTRA_VZ = 4.5;
+/** Velocidade a partir da qual o chute é "forte" (rastro visual, etc.). */
+export const SHOT_STRONG_SPEED = 15;
+
+// ---------------------------------------------------------------------------
+// Desenho (só visual; não afeta a física)
+// ---------------------------------------------------------------------------
+
+/** Raio desenhado da bola (m): maior que o físico para ser legível na tela. */
+export const BALL_VISUAL_RADIUS = 0.2;

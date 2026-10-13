@@ -29,7 +29,7 @@ async function start(): Promise<void> {
   // Teclado próprio (KeyboardEvent.code + ';' do ABNT2), ligado à janela.
   keyboard.attach(window);
 
-  new Phaser.Game({
+  const game = new Phaser.Game({
     type: Phaser.AUTO,
     parent: 'game',
     width: GAME_WIDTH,
@@ -50,6 +50,11 @@ async function start(): Promise<void> {
     },
     scene: [BootScene, MatchScene],
   });
+
+  // Ferramenta de inspeção: com ?debug na URL, o jogo fica acessível no console.
+  if (new URLSearchParams(window.location.search).has('debug')) {
+    (window as unknown as { derby: Phaser.Game }).derby = game;
+  }
 }
 
 void start();
