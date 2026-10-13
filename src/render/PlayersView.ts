@@ -10,9 +10,45 @@ import { playerTextureKey } from '../art/match-art';
 import type { Match } from '../sim/match';
 import type { SimEvent } from '../sim/events';
 import { PlayerAnimator } from './PlayerAnimator';
+import type { WeatherId } from '../data/weather';
+import { shadowCount, shadowsAt } from './shadows';
+import type { ShadowCast } from './shadows';
+
+/**
+ * Posiciona as elipses de sombra no chão: cada uma deslocada e alongada na direção da luz,
+ * com rx/ry (m) do objeto.
+ */
+export function drawShadows(
+  ellipses: Phaser.GameObjects.Ellipse[],
+  casts: ShadowCast[],
+  x: number,
+  y: number,
+  rx: number,
+  ry: number,
+  alphaScale = 1,
+): void {
+  ellipses.forEach((e, i) => {
+    const c = casts[i];
+    if (!c) {
+      e.setVisible(false);
+      return;
+    }
+    const len = Math.hypot(c.dx, c.dy);
+    const cx = x + c.dx * (c.stretch * 0.5 + 0.5);
+    const cy = y + c.dy * (c.stretch * 0.5 + 0.5);
+    const p = project(cx, cy, 0);
+    const tip = project(cx + (len > 0 ? c.dx / len : 1), cy + (len > 0 ? c.dy / len : 0), 0);
+    const rot = len > 0 ? Math.atan2(tip.y - p.y, tip.x - p.x) : 0;
+    e.setVisible(true)
+      .setPosition(p.x, p.y)
+      .setDisplaySize(rx * 2 * c.stretch * PPM * p.scale, ry * 2 * PPM * p.scale)
+      .setRotation(rot)
+      .setAlpha(c.alpha * alphaScale);
+  });
+}
 
 interface PlayerGfx {
-  shadow: Phaser.GameObjects.Ellipse;
+  shadows: Phaser.GameObjects.Ellipse[];
   sprite: Phaser.GameObjects.Image;
   anim: PlayerAnimator;
 }
@@ -21,11 +57,17 @@ export class PlayersView {
   private readonly gfx: PlayerGfx[] = [];
   private readonly scale = displayScale(PPM);
 
-  constructor(scene: Phaser.Scene, match: Match) {
+  constructor(
+    scene: Phaser.Scene,
+    match: Match,
+    private readonly weather: WeatherId,
+  ) {
     for (const p of match.world.players) {
-      const shadow = scene.add.ellipse(0, 0, 1, 1, 0x1a1410, 0.3).setDepth(DEPTH_SHADOWS);
+      const shadows = Array.from({ length: shadowCount(weather) }, () =>
+        scene.add.ellipse(0, 0, 1, 1, 0x1a1410, 0.3).setDepth(DEPTH_SHADOWS),
+      );
       const sprite = scene.add.image(0, 0, playerTextureKey(p.id));
-      this.gfx.push({ shadow, sprite, anim: new PlayerAnimator() });
+      this.gfx.push({ shadows, sprite, anim: new PlayerAnimator() });
     }
   }
 
@@ -65,9 +107,7 @@ export class PlayersView {
       const ground = project(x, y, 0);
       const s = ground.scale;
 
-      g.shadow
-        .setPosition(ground.x, ground.y)
-        .setDisplaySize(PLAYER_RADIUS * 2.3 * PPM * s, PLAYER_RADIUS * 1.05 * PPM * s);
+      drawShadows(g.shadows, shadowsAt(this.weather, x, y), x, y, PLAYER_RADIUS * 1.15, PLAYER_RADIUS * 0.52);
 
       const keeper = p.role === 'GK' ? world.keepers[p.team] : null;
       const charging =
@@ -100,7 +140,7 @@ export class PlayersView {
 
   destroy(): void {
     for (const g of this.gfx) {
-      g.shadow.destroy();
+      for (const sh of g.shadows) sh.destroy();
       g.sprite.destroy();
     }
     this.gfx.length = 0;

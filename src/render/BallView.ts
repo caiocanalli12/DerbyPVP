@@ -7,14 +7,22 @@ import { BALL_VISUAL_RADIUS, BOIL_FPS } from '../config/constants';
 import { DEPTH_SHADOWS, depthFor, PPM, project } from '../core/projection';
 import { BALL_TEXTURE_RADIUS, BALL_VARIANTS, ballKey } from '../art/ball-art';
 import type { Ball } from '../sim/ball';
+import type { WeatherId } from '../data/weather';
+import { drawShadows } from './PlayersView';
+import { shadowCount, shadowsAt } from './shadows';
 
 export class BallView {
-  private readonly shadow: Phaser.GameObjects.Ellipse;
+  private readonly shadows: Phaser.GameObjects.Ellipse[];
   private readonly sprite: Phaser.GameObjects.Image;
   private spin = 0;
 
-  constructor(scene: Phaser.Scene) {
-    this.shadow = scene.add.ellipse(0, 0, 1, 1, 0x1a1410, 0.32).setDepth(DEPTH_SHADOWS + 2);
+  constructor(
+    scene: Phaser.Scene,
+    private readonly weather: WeatherId,
+  ) {
+    this.shadows = Array.from({ length: shadowCount(weather) }, () =>
+      scene.add.ellipse(0, 0, 1, 1, 0x1a1410, 0.32).setDepth(DEPTH_SHADOWS + 2),
+    );
     this.sprite = scene.add.image(0, 0, ballKey(0));
   }
 
@@ -22,14 +30,10 @@ export class BallView {
     const x = ball.prevX + (ball.x - ball.prevX) * alpha;
     const y = ball.prevY + (ball.y - ball.prevY) * alpha;
     const z = ball.prevZ + (ball.z - ball.prevZ) * alpha;
-    const ground = project(x, y, 0);
-    const s = ground.scale;
-    // Sombra menor e mais fraca quanto mais alta a bola.
+    const s = project(x, y, 0).scale;
+    // Sombra menor e mais fraca quanto mais alta a bola (ela fica no chão e mostra a altura).
     const k = 1 / (1 + z * 0.35);
-    this.shadow
-      .setPosition(ground.x, ground.y)
-      .setDisplaySize(BALL_VISUAL_RADIUS * 2.2 * PPM * s * k, BALL_VISUAL_RADIUS * 1.1 * PPM * s * k)
-      .setAlpha(0.32 * k + 0.05);
+    drawShadows(this.shadows, shadowsAt(this.weather, x, y), x, y, BALL_VISUAL_RADIUS * 1.1 * k, BALL_VISUAL_RADIUS * 0.55 * k, k + 0.15);
 
     // Rotação visual proporcional à velocidade (sentido pelo movimento na tela).
     const speed = Math.hypot(ball.vx, ball.vy);
@@ -48,7 +52,7 @@ export class BallView {
   }
 
   destroy(): void {
-    this.shadow.destroy();
+    for (const sh of this.shadows) sh.destroy();
     this.sprite.destroy();
   }
 }

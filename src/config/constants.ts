@@ -40,7 +40,7 @@ export const PENALTY_SPOT_DISTANCE = 6;
 export const POST_RADIUS = 0.06;
 
 /** Alturas visuais das paredes (só desenho; para a física as paredes não têm topo). */
-export const WALL_BACK_HEIGHT = 1.1;
+export const WALL_BACK_HEIGHT = 1.5;
 export const WALL_SIDE_HEIGHT = 0.8;
 export const WALL_FRONT_HEIGHT = 0.45;
 /** Altura visual da parede atrás do gol (acima do travessão). */
@@ -451,3 +451,41 @@ export const ANIM_RUN_THRESHOLD = 0.6;
 /** "Achatar ao frear": desaceleração (m/s²) que dispara e duração (s) do achatamento. */
 export const ANIM_BRAKE_DECEL = 30;
 export const ANIM_BRAKE_SQUASH_TIME = 0.12;
+
+// ---------------------------------------------------------------------------
+// Estádio, torcida, placas e clima (só visual)
+// ---------------------------------------------------------------------------
+
+/** Altura (px) da faixa de céu no topo da tela. */
+export const SKY_HEIGHT = 66;
+/** Torcida: fileiras na arquibancada do fundo, espaço entre torcedores (px) e escala. */
+export const CROWD_ROWS = 9;
+export const CROWD_SPACING = 21;
+export const CROWD_SCALE_FRONT = 0.92;
+export const CROWD_SCALE_BACK = 0.7;
+/** Torcedores nas arquibancadas laterais (colunas por lado). */
+export const CROWD_SIDE_COLUMNS = 3;
+/** Balanço da torcida: frequência (Hz) calma e agitada; pulo (px) agitada e no gol. */
+export const CROWD_SWAY_HZ = 1.1;
+export const CROWD_EXCITED_HZ = 3;
+export const CROWD_EXCITED_JUMP = 3;
+export const CROWD_GOAL_JUMP = 9;
+/** A torcida se agita quando o time ataca a menos disto (m) do gol adversário. */
+export const CROWD_ATTACK_DISTANCE = 12;
+/** Fração de torcedores com bandeira. */
+export const CROWD_FLAG_FRACTION = 0.05;
+/** Placas de patrocínio: quantas na parede do fundo, troca (s) e duração da virada (s). */
+export const SPONSOR_BOARDS = 5;
+export const SPONSOR_SWITCH_TIME = 8;
+export const SPONSOR_FLIP_TIME = 0.6;
+/** Lâminas verticais de cada placa (efeito de placa giratória de três faces). */
+export const SPONSOR_SLATS = 9;
+/** Chuva: quantidade de traços, velocidade (px/s) e inclinação (px por px de queda). */
+export const RAIN_DROPS = 170;
+export const RAIN_SPEED = 900;
+export const RAIN_SLANT = 0.35;
+/** Respingos por segundo no gramado. */
+export const RAIN_SPLASHES_PER_SEC = 40;
+/** Rede: duração (s) e amplitude (m) do balanço depois do gol. */
+export const NET_WAVE_TIME = 1.6;
+export const NET_WAVE_AMPLITUDE = 0.38;

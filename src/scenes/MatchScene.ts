@@ -25,19 +25,32 @@ import type { KitChoice } from '../sim/kits';
 import { getTeam, isTeamId } from '../data/teams';
 import type { TeamId } from '../data/teams';
 import { IndicatorView } from '../render/IndicatorView';
-import { createMatch, drainMatchEvents, formatClock, PERIOD_LABEL, stepMatch } from '../sim/match';
+import { CrowdView } from '../render/CrowdView';
+import type { CrowdMood } from '../render/CrowdView';
+import { SponsorView } from '../render/SponsorView';
+import { WeatherView } from '../render/WeatherView';
+import { generateCrowdTexture } from '../art/crowd-art';
+import { isWeatherId, randomWeather } from '../data/weather';
+import type { WeatherId } from '../data/weather';
+import { CROWD_ATTACK_DISTANCE } from '../config/constants';
+import { goalCenter } from '../sim/field';
+import { attackedGoal } from '../sim/world';
+import { Rng } from '../core/rng';
+import { createMatch, drainMatchEvents, formatClock, PENALTY_GOAL, PERIOD_LABEL, stepMatch } from '../sim/match';
 import type { Match } from '../sim/match';
 import { drainEvents, getPlayer } from '../sim/world';
 import { CREAM_CSS, FONT_TEXT, FONT_TITLE, INK_CSS } from '../art/style';
 
-/**
- * Partida: laço de passo fixo, espelhamento da simulação e interface provisória.
- */
-/** Configuração de uma partida (vem da seleção de times). */
+/** Configuração de uma partida (vem da seleção de times e da tela VS). */
 export interface MatchConfig {
   teams: [TeamId, TeamId];
   seed: number;
+  weather: WeatherId;
 }
+
+/**
+ * Partida: laço de passo fixo e espelhamento da simulação na tela.
+ */
 
 export class MatchScene extends Phaser.Scene {
   private config!: MatchConfig;
@@ -52,6 +65,10 @@ export class MatchScene extends Phaser.Scene {
   private ballView!: BallView;
   private indicators!: IndicatorView;
   private penaltyView!: PenaltyView;
+  private fieldView!: FieldView;
+  private crowdView!: CrowdView;
+  private sponsorView!: SponsorView;
+  private weatherView!: WeatherView;
   private chargeBar!: Phaser.GameObjects.Graphics;
   private scoreText!: Phaser.GameObjects.Text;
   private clockText!: Phaser.GameObjects.Text;
@@ -71,9 +88,13 @@ export class MatchScene extends Phaser.Scene {
     const q = new URLSearchParams(window.location.search);
     const pick = (v: string | null | undefined, fallback: TeamId): TeamId =>
       v && isTeamId(v.toUpperCase()) ? (v.toUpperCase() as TeamId) : fallback;
+    const seed = data.seed ?? (Date.now() >>> 0);
+    const w = q.get('weather');
+    const rng = new Rng(seed ^ 0xbeef);
     this.config = {
       teams: data.teams ?? [pick(q.get('t1'), 'PAL'), pick(q.get('t2'), 'COR')],
-      seed: data.seed ?? (Date.now() >>> 0),
+      seed,
+      weather: data.weather ?? (w && isWeatherId(w) ? w : randomWeather(() => rng.next())),
     };
   }
 
@@ -136,9 +157,14 @@ export class MatchScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor('#000000');
     const shirts: [number, number] = [this.kits.kits[0].shirt, this.kits.kits[1].shirt];
 
-    new FieldView(this);
-    this.playersView = new PlayersView(this, this.match);
-    this.ballView = new BallView(this);
+    const weather = this.config.weather;
+    this.fieldView = new FieldView(this, weather, this.config.seed);
+    generateCrowdTexture(this, this.kits.kits);
+    this.crowdView = new CrowdView(this, this.config.seed);
+    this.sponsorView = new SponsorView(this);
+    this.weatherView = new WeatherView(this, weather, this.config.seed);
+    this.playersView = new PlayersView(this, this.match, weather);
+    this.ballView = new BallView(this, weather);
     this.indicators = new IndicatorView(this, shirts);
     this.penaltyView = new PenaltyView(this, shirts, this.kits.keeperColors);
     this.chargeBar = this.add.graphics().setDepth(DEPTH_UI - 10);
@@ -202,6 +228,10 @@ export class MatchScene extends Phaser.Scene {
       this.ballView.destroy();
       this.indicators.destroy();
       this.penaltyView.destroy();
+      this.fieldView.destroy();
+      this.crowdView.destroy();
+      this.sponsorView.destroy();
+      this.weatherView.destroy();
     });
   }
 
@@ -241,6 +271,10 @@ export class MatchScene extends Phaser.Scene {
     const renderDt = this.paused ? 0 : frameDt;
     this.playersView.update(this.match, alpha, now, renderDt);
     this.ballView.update(world.ball, alpha, now, renderDt);
+    this.fieldView.update(now);
+    this.crowdView.update(now, this.crowdMoods());
+    this.sponsorView.update(now);
+    this.weatherView.update(now, renderDt);
     const showIndicators = this.match.phase === 'JOGANDO' || this.match.phase === 'SAIDA_DE_BOLA';
     this.indicators.update(world, alpha, now, showIndicators);
     this.penaltyView.update(this.match, now);
@@ -260,9 +294,32 @@ export class MatchScene extends Phaser.Scene {
     this.pauseText.setVisible(paused);
   }
 
+  /** Ânimo de cada metade da torcida (esquerda = J1, direita = J2). */
+  private crowdMoods(): [CrowdMood, CrowdMood] {
+    const m = this.match;
+    const moods: [CrowdMood, CrowdMood] = ['calm', 'calm'];
+    const last = m.goals[m.goals.length - 1];
+    if (m.phase === 'COMEMORACAO_GOL' && last) moods[last.team] = 'goal';
+    const a = m.attempt;
+    if (a && a.phase === 'result' && a.plan?.result === 'goal') moods[a.team] = 'goal';
+    if (m.phase === 'FIM' && m.phaseTimer < 0.1) return moods;
+    if (m.phase === 'JOGANDO') {
+      const b = m.world.ball;
+      for (const team of [0, 1] as const) {
+        if (moods[team] === 'goal') continue;
+        const g = goalCenter(attackedGoal(m.world, team));
+        const owner = b.owner !== null ? m.world.players[b.owner] : null;
+        const ours = !owner || owner.team === team;
+        if (ours && Math.hypot(b.x - g.x, b.y - g.y) < CROWD_ATTACK_DISTANCE) moods[team] = 'excited';
+      }
+    }
+    return moods;
+  }
+
   /** Eventos da simulação -> áudio (vazio por enquanto) e efeitos. */
   private consumeEvents(): void {
     for (const e of drainEvents(this.match.world)) {
+      if (e.type === 'goal') this.fieldView.goalScored(e.side, this.time.now / 1000);
       this.playersView.onEvent(e, this.match);
       if (e.type === 'pass') audio.play('passe');
       else if (e.type === 'shot') audio.play('chute');
@@ -273,12 +330,17 @@ export class MatchScene extends Phaser.Scene {
     for (const e of drainMatchEvents(this.match)) {
       if (e.type === 'whistle') audio.play('apito');
       else if (e.type === 'finalWhistle' || e.type === 'periodEnd') audio.play('apito-final');
-      else if (e.type === 'goal') audio.play('gol');
+      else if (e.type === 'goal') {
+        audio.play('gol');
+      }
       else if (e.type === 'penaltyKick') {
         audio.play('chute');
         if (this.match.attempt) this.playersView.onPenaltyKick(this.match.attempt.kicker);
       }
-      else if (e.type === 'penaltyResult' && e.result === 'goal') audio.play('gol');
+      else if (e.type === 'penaltyResult' && e.result === 'goal') {
+        audio.play('gol');
+        this.fieldView.goalScored(PENALTY_GOAL, this.time.now / 1000);
+      }
     }
   }
 
