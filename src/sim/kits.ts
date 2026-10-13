@@ -6,6 +6,8 @@
  * - Se as cores de leitura dos titulares estiverem próximas demais (CIEDE2000 abaixo do
  *   limite), o J2 usa o reserva; se ainda conflitar, o J1 também usa o reserva.
  * - Mesmo time dos dois lados: o J2 usa o reserva.
+ * - Na seleção de times, cada jogador pode fixar o uniforme 1 (titular) ou 2 (reserva), desde que
+ *   a combinação não fique com cores parecidas; quem está no automático se ajusta.
  * - Goleiros: cada um recebe uma cor da lista, maximizando a diferença em relação aos dois
  *   uniformes de linha e ao outro goleiro.
  */
@@ -139,6 +141,41 @@ export interface KitChoice {
   keeperColors: [number, number];
 }
 
+/** Monta a escolha com os uniformes dados (e as cores dos goleiros para eles). */
+export function kitChoiceFor(t1: TeamId, t2: TeamId, variants: readonly [KitVariant, KitVariant]): KitChoice {
+  const kits: [Kit, Kit] = [kitOf(t1, variants[0]), kitOf(t2, variants[1])];
+  return { variants: [variants[0], variants[1]], kits, keeperColors: chooseKeeperColors(kits[0], kits[1]) };
+}
+
+/** Os dois uniformes podem jogar juntos (não é o mesmo uniforme nem cores de leitura parecidas). */
+export function kitsCompatible(t1: TeamId, v1: KitVariant, t2: TeamId, v2: KitVariant): boolean {
+  if (t1 === t2 && v1 === v2) return false;
+  return !kitsConflict(kitOf(t1, v1), kitOf(t2, v2));
+}
+
+/** Uniforme fixado por cada jogador na seleção (null = automático). */
+export type KitPrefs = readonly [KitVariant | null, KitVariant | null];
+
+/**
+ * Resolve os uniformes respeitando o que cada jogador fixou. Sem escolhas, é a regra automática.
+ * Com escolhas, procura na mesma ordem da regra (titulares; J2 reserva; os dois reservas; J1
+ * reserva) a primeira combinação compatível que respeita o que foi fixado; null se não houver.
+ */
+export function chooseKitsWith(t1: TeamId, t2: TeamId, prefs: KitPrefs): KitChoice | null {
+  if (prefs[0] === null && prefs[1] === null) return chooseKits(t1, t2);
+  const order: readonly [KitVariant, KitVariant][] = [
+    ['home', 'home'],
+    ['home', 'away'],
+    ['away', 'away'],
+    ['away', 'home'],
+  ];
+  for (const [v1, v2] of order) {
+    if ((prefs[0] !== null && prefs[0] !== v1) || (prefs[1] !== null && prefs[1] !== v2)) continue;
+    if (kitsCompatible(t1, v1, t2, v2)) return kitChoiceFor(t1, t2, [v1, v2]);
+  }
+  return null;
+}
+
 /** Resolve os uniformes da partida (J1 = times[0], J2 = times[1]). */
 export function chooseKits(t1: TeamId, t2: TeamId): KitChoice {
   let v1: KitVariant = 'home';
@@ -149,8 +186,7 @@ export function chooseKits(t1: TeamId, t2: TeamId): KitChoice {
     v2 = 'away';
     if (kitsConflict(kitOf(t1, v1), kitOf(t2, v2))) v1 = 'away';
   }
-  const kits: [Kit, Kit] = [kitOf(t1, v1), kitOf(t2, v2)];
-  return { variants: [v1, v2], kits, keeperColors: chooseKeeperColors(kits[0], kits[1]) };
+  return kitChoiceFor(t1, t2, [v1, v2]);
 }
 
 /**

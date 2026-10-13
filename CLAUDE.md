@@ -51,7 +51,7 @@ tests/
 - Usar `KeyboardEvent.code`. `preventDefault()` em setas, espaço, `Slash`, `Period`.
 - Estado por tecla lido por passo: pressionada / acabou de pressionar / acabou de soltar (com latch, para não perder toques entre passos fixos).
 - 8 direções, diagonal normalizada. `blur` solta todas as teclas e pausa a partida.
-- Menus: J1 = WASD + F confirma + G volta; J2 = setas + `;` confirma + `.` volta; Enter confirma.
+- Menus: J1 = WASD + F confirma + G volta; J2 = setas + `;` confirma + `.` volta; Enter confirma. Na seleção de times, H (J1) e `,` (J2) trocam entre uniforme 1 e 2 (pedido do usuário).
 
 ## Mundo e perspectiva
 
@@ -88,7 +88,7 @@ tests/
 - Comemoração ~3 s ("GOOOL!" elástico, jogador comemora, torcida pula, tremor, rede); passe pula após 1 s. Intertítulos de cinema mudo.
 
 ## Times (`data/teams.ts`)
-PAL, COR, BAR, RMA, INT, MIL, LIV, CHE — uniformes fiéis (titular e reserva), escudos só em contorno com marcas leves. `sim/kits.ts`: cor de leitura; conflito → J2 reserva, ainda conflita → J1 reserva; mesmo time → J2 reserva. Testes obrigatórios: COR×RMA, BAR×INT, MIL×LIV trocam; PAL×COR não. Goleiros: cores (laranja, verde-limão, cinza, rosa, amarelo, preto) maximizando diferença.
+PAL, COR, BAR, RMA, INT, MIL, LIV, CHE — uniformes fiéis (titular e reserva), escudos só em contorno com marcas leves. `sim/kits.ts`: cor de leitura; conflito → J2 reserva, ainda conflita → J1 reserva; mesmo time → J2 reserva. Escolha manual na seleção (`chooseKitsWith`): vale se a combinação não conflitar; quem está no automático se ajusta; escolha conflitante é recusada; mudar de time volta ao automático. Testes obrigatórios: COR×RMA, BAR×INT, MIL×LIV trocam; PAL×COR não. Goleiros: cores (laranja, verde-limão, cinza, rosa, amarelo, preto) maximizando diferença.
 
 ## Telas
 Título (bola de futebol de pentágonos quicando) → Seleção (J1 esquerda / J2 direita, confirmar/desfazer; prévia do uniforme sem a linha que ferve, só respiração e balanço suaves) → VS (2,5 s, clima sorteado) → Partida → Pausa (Continuar, Reiniciar, Efeitos de filme, Sair) → Resultado (Revanche, Trocar times, Menu).

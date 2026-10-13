@@ -1,6 +1,7 @@
 /**
  * Teclado dos 2 jogadores.
  *
+ * - Na seleção de times, H (J1) e `,` (J2) alternam entre o uniforme 1 e o 2.
  * - Usa KeyboardEvent.code (posição física), com exceção do passe do J2, que aceita
  *   `Slash` (ABNT2), `Semicolon` (US) ou qualquer tecla cujo `key` seja ';'.
  * - Guarda o estado de cada ação e "trava" (latch) os eventos de apertar/soltar até a
@@ -16,12 +17,14 @@ export type Action =
   | 'p1Right'
   | 'p1Pass'
   | 'p1Shoot'
+  | 'p1Kit'
   | 'p2Up'
   | 'p2Down'
   | 'p2Left'
   | 'p2Right'
   | 'p2Pass'
   | 'p2Shoot'
+  | 'p2Kit'
   | 'pause'
   | 'enter'
   | 'debug';
@@ -33,12 +36,14 @@ export const ALL_ACTIONS: readonly Action[] = [
   'p1Right',
   'p1Pass',
   'p1Shoot',
+  'p1Kit',
   'p2Up',
   'p2Down',
   'p2Left',
   'p2Right',
   'p2Pass',
   'p2Shoot',
+  'p2Kit',
   'pause',
   'enter',
   'debug',
@@ -52,6 +57,7 @@ export const CODE_TO_ACTION: Readonly<Record<string, Action>> = {
   KeyD: 'p1Right',
   KeyF: 'p1Pass',
   KeyG: 'p1Shoot',
+  KeyH: 'p1Kit', // uniforme 1/2 na seleção de times
   ArrowUp: 'p2Up',
   ArrowDown: 'p2Down',
   ArrowLeft: 'p2Left',
@@ -59,6 +65,7 @@ export const CODE_TO_ACTION: Readonly<Record<string, Action>> = {
   Slash: 'p2Pass', // ';' no ABNT2
   Semicolon: 'p2Pass', // ';' no teclado americano
   Period: 'p2Shoot',
+  Comma: 'p2Kit', // uniforme 1/2 na seleção de times (ao lado do '.' no ABNT2 e no americano)
   Escape: 'pause',
   KeyP: 'pause',
   Enter: 'enter',
@@ -108,6 +115,8 @@ export interface InputFrame {
   pause: ButtonState;
   enter: ButtonState;
   debug: ButtonState;
+  /** Troca de uniforme na seleção de times: H (J1) e `,` (J2). */
+  kit: [ButtonState, ButtonState];
   /** A janela perdeu o foco desde a leitura anterior. */
   blurred: boolean;
 }
@@ -151,6 +160,7 @@ export function emptyInputFrame(): InputFrame {
     pause: emptyButton(),
     enter: emptyButton(),
     debug: emptyButton(),
+    kit: [emptyButton(), emptyButton()],
     blurred: false,
   };
 }
@@ -274,6 +284,7 @@ export class KeyboardInput {
       pause: btn('pause'),
       enter: btn('enter'),
       debug: btn('debug'),
+      kit: [btn('p1Kit'), btn('p2Kit')],
       blurred: this.blurLatch,
     };
     this.pressedLatch.clear();

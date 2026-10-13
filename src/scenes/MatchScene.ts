@@ -20,8 +20,8 @@ import { PlayersView } from '../render/PlayersView';
 import { PenaltyView } from '../render/PenaltyView';
 import { advanceArt, artBudgetMs, artSignature, buildLooks, generateMatchArt, matchArtReady } from '../art/match-art';
 import type { ArtStep } from '../art/match-art';
-import { chooseKits } from '../sim/kits';
-import type { KitChoice } from '../sim/kits';
+import { chooseKits, kitChoiceFor } from '../sim/kits';
+import type { KitChoice, KitVariant } from '../sim/kits';
 import { getTeam, isTeamId } from '../data/teams';
 import type { TeamId } from '../data/teams';
 import { IndicatorView } from '../render/IndicatorView';
@@ -55,6 +55,8 @@ export interface MatchConfig {
   teams: [TeamId, TeamId];
   seed: number;
   weather: WeatherId;
+  /** Uniformes escolhidos na seleção (sem isso, a regra automática). */
+  kits?: [KitVariant, KitVariant];
 }
 
 /**
@@ -105,13 +107,15 @@ export class MatchScene extends Phaser.Scene {
       teams: data.teams ?? [pick(q.get('t1'), 'PAL'), pick(q.get('t2'), 'COR')],
       seed,
       weather: data.weather ?? (w && isWeatherId(w) ? w : randomWeather(() => rng.next())),
+      kits: data.kits,
     };
   }
 
   create(): void {
     this.ready = false;
     this.loading = null;
-    this.kits = chooseKits(this.config.teams[0], this.config.teams[1]);
+    const [t1, t2] = this.config.teams;
+    this.kits = this.config.kits ? kitChoiceFor(t1, t2, this.config.kits) : chooseKits(t1, t2);
     // A semente da arte fica fixa (revanche reaproveita as texturas); a da partida varia.
     this.match = createMatch((this.config.seed ^ Date.now()) >>> 0);
     const signature = artSignature(this.config.teams, this.kits, this.config.seed);
@@ -305,6 +309,7 @@ export class MatchScene extends Phaser.Scene {
         penalties: pens,
         winner,
         colors: [this.kits.kits[0].shirt, this.kits.kits[1].shirt],
+        kits: this.kits.variants,
       }),
     );
   }

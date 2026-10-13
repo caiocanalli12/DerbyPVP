@@ -3,6 +3,7 @@ import { BOIL_FPS, GAME_HEIGHT, GAME_WIDTH } from '../config/constants';
 import { audio } from '../audio/AudioManager';
 import { getTeam } from '../data/teams';
 import type { TeamId } from '../data/teams';
+import type { KitVariant } from '../sim/kits';
 import { crestKey, generateCrestTextures } from '../art/crest-art';
 import { CROWD_KEY, FAN_BOILS, FAN_VARIANTS, fanFrame } from '../art/crowd-art';
 import { CREAM, CREAM_CSS, FONT_TEXT, FONT_TITLE, INK, INK_CSS } from '../art/style';
@@ -23,6 +24,8 @@ export interface ResultData {
   winner: 0 | 1;
   /** Cores das camisas usadas (para os detalhes). */
   colors: [number, number];
+  /** Uniformes usados (a revanche e a nova seleção partem deles). */
+  kits: [KitVariant, KitVariant];
 }
 
 /**
@@ -144,8 +147,8 @@ export class ResultScene extends Phaser.Scene {
       this.cameras.main.fadeOut(220, 20, 12, 8);
       this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start(scene, data));
     };
-    if (chosen === 0) go('VersusScene', { teams: d.teams, seed: d.seed });
-    else if (chosen === 1) go('TeamSelectScene', { teams: d.teams });
+    if (chosen === 0) go('VersusScene', { teams: d.teams, seed: d.seed, kits: d.kits });
+    else if (chosen === 1) go('TeamSelectScene', { teams: d.teams, kits: d.kits });
     else go('TitleScene', {});
   }
 }

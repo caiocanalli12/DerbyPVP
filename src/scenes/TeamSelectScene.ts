@@ -7,6 +7,7 @@ import {
   PREVIEW_BREATH_HZ,
   PREVIEW_SWAY_DEG,
   PREVIEW_SWAY_HZ,
+  KIT_REFUSED_FLASH,
 } from '../config/constants';
 import { audio } from '../audio/AudioManager';
 import { TEAMS } from '../data/teams';
@@ -14,13 +15,21 @@ import type { TeamId } from '../data/teams';
 import { crestKey, generateCrestTextures } from '../art/crest-art';
 import { generateKitPreview, previewKey } from '../art/preview-art';
 import { CREAM, CREAM_CSS, FONT_TEXT, FONT_TITLE, INK, INK_CSS } from '../art/style';
-import { chooseKits } from '../sim/kits';
+import { chooseKits, chooseKitsWith, kitOf } from '../sim/kits';
+import type { KitChoice, KitVariant } from '../sim/kits';
 import { FilmView, filmEffectsEnabled } from '../render/FilmView';
 import { addSunburst, addTitle, readMenuInput } from '../render/menu';
 
 const COLS = 4;
 /** Escala da prévia do jogador com o uniforme. */
 const PREVIEW_SCALE = 0.86;
+/** Seletor de uniforme (px): tecla, as duas opções e a altura delas. */
+const KIT_KEY_W = 26;
+const KIT_PILL_W = 104;
+const KIT_PILL_H = 26;
+const KIT_GAP = 7;
+/** Tecla que troca o uniforme de cada jogador. */
+const KIT_KEY: readonly [string, string] = ['H', ','];
 /** Tempo (s) depois que os dois confirmam até seguir para o VS. */
 const BOTH_READY_DELAY = 0.7;
 
@@ -29,7 +38,13 @@ interface Side {
   confirmed: boolean;
   crest: Phaser.GameObjects.Image;
   name: Phaser.GameObjects.Text;
-  kitLabel: Phaser.GameObjects.Text;
+  /** Uniforme fixado pelo jogador (null = automático). */
+  pref: KitVariant | null;
+  /** Até quando (s) mostrar o aviso de troca recusada. */
+  refusedUntil: number;
+  kitGfx: Phaser.GameObjects.Graphics;
+  kitTexts: [Phaser.GameObjects.Text, Phaser.GameObjects.Text];
+  kitKey: Phaser.GameObjects.Text;
   preview: Phaser.GameObjects.Image;
   cursor: Phaser.GameObjects.Graphics;
   stamp: Phaser.GameObjects.Text;
@@ -39,10 +54,14 @@ interface Side {
 
 export interface TeamSelectData {
   teams?: [TeamId, TeamId];
+  /** Uniformes da partida anterior ("Trocar times"): começam escolhidos. */
+  kits?: [KitVariant, KitVariant];
 }
 
 /**
  * Seleção de times: J1 à esquerda, J2 à direita, cada um com a própria grade e controles.
+ * Cada um escolhe o uniforme 1 (titular) ou 2 (reserva) com H / `,`; a combinação nunca fica com
+ * cores parecidas (quem está no automático se ajusta; uma escolha que conflitaria é recusada).
  * A partida começa quando os dois confirmam; o botão de voltar desfaz a confirmação.
  */
 export class TeamSelectScene extends Phaser.Scene {
@@ -53,6 +72,9 @@ export class TeamSelectScene extends Phaser.Scene {
   private readySince: number | null = null;
   private leaving = false;
   private initial: [TeamId, TeamId] = ['PAL', 'COR'];
+  private initialKits: [KitVariant | null, KitVariant | null] = [null, null];
+  /** Uniformes que vão ser usados, com as escolhas atuais. */
+  private kits!: KitChoice;
 
   constructor() {
     super('TeamSelectScene');
@@ -60,6 +82,7 @@ export class TeamSelectScene extends Phaser.Scene {
 
   init(data: TeamSelectData): void {
     this.initial = data.teams ?? ['PAL', 'COR'];
+    this.initialKits = data.kits ? [data.kits[0], data.kits[1]] : [null, null];
   }
 
   create(): void {
@@ -109,7 +132,7 @@ export class TeamSelectScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(5);
     this.add
-      .text(cx, 160, i === 0 ? 'W A S D · F confirma · G volta' : 'Setas · ; confirma · . volta', {
+      .text(cx, 160, i === 0 ? 'W A S D · F confirma · G volta · H uniforme' : 'Setas · ; confirma · . volta · , uniforme', {
         fontFamily: FONT_TEXT,
         fontSize: '18px',
         color: CREAM_CSS,
@@ -122,10 +145,14 @@ export class TeamSelectScene extends Phaser.Scene {
       .text(cx - 120, 368, '', { fontFamily: FONT_TITLE, fontSize: '30px', color: CREAM_CSS, stroke: INK_CSS, strokeThickness: 6 })
       .setOrigin(0.5)
       .setDepth(5);
-    const kitLabel = this.add
-      .text(cx - 120, 400, '', { fontFamily: FONT_TEXT, fontSize: '17px', color: CREAM_CSS })
+    const kitGfx = this.add.graphics().setDepth(5);
+    const pillText = (): Phaser.GameObjects.Text =>
+      this.add.text(0, 404, '', { fontFamily: FONT_TEXT, fontSize: '15px', fontStyle: '700', color: INK_CSS }).setOrigin(0.5).setDepth(6);
+    const kitTexts: [Phaser.GameObjects.Text, Phaser.GameObjects.Text] = [pillText(), pillText()];
+    const kitKey = this.add
+      .text(0, 404, KIT_KEY[i], { fontFamily: FONT_TEXT, fontSize: '16px', fontStyle: '700', color: INK_CSS })
       .setOrigin(0.5)
-      .setDepth(5);
+      .setDepth(6);
     const preview = this.add.image(cx + 130, 410, crestKey('PAL')).setOrigin(0.5, 1).setScale(PREVIEW_SCALE).setDepth(5);
     this.add.ellipse(cx + 130, 404, 110, 22, 0x1a1410, 0.4).setDepth(4);
 
@@ -153,18 +180,54 @@ export class TeamSelectScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(5);
     const index = Math.max(0, TEAMS.findIndex((t) => t.id === this.initial[i]));
-    return { index, confirmed: false, crest, name, kitLabel, preview, cursor, stamp, status, grid };
+    const pref = this.initialKits[i];
+    return { index, confirmed: false, crest, name, pref, refusedUntil: 0, kitGfx, kitTexts, kitKey, preview, cursor, stamp, status, grid };
   }
 
   private teamOf(side: Side): TeamId {
     return TEAMS[side.index]!.id;
   }
 
-  /** Atualiza escudo, nome e prévia com o uniforme que vai ser usado de fato. */
-  private refresh(): void {
+  /** Escolhas que valem agora: quem confirmou fica com o uniforme que tinha. */
+  private prefs(): [KitVariant | null, KitVariant | null] {
+    const pick = (i: 0 | 1): KitVariant | null => {
+      const s = this.sides[i];
+      return s.confirmed && this.kits ? this.kits.variants[i] : s.pref;
+    };
+    return [pick(0), pick(1)];
+  }
+
+  /** Uniformes com as escolhas atuais. */
+  private resolveKits(): KitChoice {
     const t1 = this.teamOf(this.sides[0]);
     const t2 = this.teamOf(this.sides[1]);
-    const kits = chooseKits(t1, t2);
+    const kits = chooseKitsWith(t1, t2, this.prefs());
+    if (kits) return kits;
+    // Uma escolha deixou de valer (o outro mudou de time): quem não confirmou volta ao automático.
+    for (const s of this.sides) if (!s.confirmed) s.pref = null;
+    return chooseKitsWith(t1, t2, this.prefs()) ?? chooseKits(t1, t2);
+  }
+
+  /** H / `,`: troca entre o uniforme 1 e o 2, se a combinação não ficar com cores parecidas. */
+  private toggleKit(i: 0 | 1, now: number): void {
+    const s = this.sides[i];
+    if (s.confirmed) return;
+    const want: KitVariant = this.kits.variants[i] === 'home' ? 'away' : 'home';
+    const prefs = this.prefs();
+    prefs[i] = want;
+    if (!chooseKitsWith(this.teamOf(this.sides[0]), this.teamOf(this.sides[1]), prefs)) {
+      s.refusedUntil = now + KIT_REFUSED_FLASH;
+      audio.play('menu-voltar');
+      return;
+    }
+    s.pref = want;
+    audio.play('menu-mover');
+  }
+
+  /** Atualiza escudo, nome, seletor de uniforme e prévia com o uniforme que vai ser usado de fato. */
+  private refresh(now = 0): void {
+    this.kits = this.resolveKits();
+    const kits = this.kits;
     this.sides.forEach((s, i) => {
       const team = TEAMS[s.index]!;
       const variant = kits.variants[i]!;
@@ -173,9 +236,63 @@ export class TeamSelectScene extends Phaser.Scene {
       s.preview.setTexture(previewKey(kitId));
       s.crest.setTexture(crestKey(team.id));
       s.name.setText(team.name.toUpperCase());
-      s.kitLabel.setText(variant === 'home' ? 'UNIFORME TITULAR' : 'UNIFORME RESERVA');
+      this.drawKitSelector(s, i as 0 | 1, team.id, variant);
       s.stamp.setVisible(s.confirmed);
-      s.status.setText(s.confirmed ? (i === 0 ? 'G desfaz' : '. desfaz') : i === 0 ? 'F para confirmar' : '; para confirmar');
+      this.updateStatus(s, i as 0 | 1, now);
+    });
+  }
+
+  private updateStatus(s: Side, i: 0 | 1, now: number): void {
+    if (now < s.refusedUntil) {
+      s.status.setText('CORES PARECIDAS COM O ADVERSÁRIO').setColor('#ff9a86');
+      return;
+    }
+    s.status
+      .setText(s.confirmed ? (i === 0 ? 'G desfaz' : '. desfaz') : i === 0 ? 'F para confirmar' : '; para confirmar')
+      .setColor(CREAM_CSS);
+  }
+
+  /** "[H] 1 TITULAR | 2 RESERVA": a opção em uso em dourado, com a cor de cada camisa. */
+  private drawKitSelector(s: Side, i: 0 | 1, team: TeamId, variant: KitVariant): void {
+    const cx = (i === 0 ? GAME_WIDTH / 4 : (GAME_WIDTH * 3) / 4) - 120;
+    const y = 404;
+    const total = KIT_KEY_W + KIT_GAP + KIT_PILL_W * 2 + KIT_GAP;
+    const left = cx - total / 2;
+    const g = s.kitGfx;
+    g.clear();
+    // Tecla.
+    g.fillStyle(CREAM, s.confirmed ? 0.45 : 1);
+    g.fillRoundedRect(left, y - 12, KIT_KEY_W, 24, 5);
+    g.lineStyle(2, INK, 1);
+    g.strokeRoundedRect(left, y - 12, KIT_KEY_W, 24, 5);
+    s.kitKey.setPosition(left + KIT_KEY_W / 2, y).setAlpha(s.confirmed ? 0.6 : 1);
+    (['home', 'away'] as const).forEach((v, k) => {
+      const x = left + KIT_KEY_W + KIT_GAP + k * (KIT_PILL_W + KIT_GAP);
+      const on = v === variant;
+      g.fillStyle(on ? 0xffd24a : 0x1a1410, on ? 1 : 0.75);
+      g.fillRoundedRect(x, y - KIT_PILL_H / 2, KIT_PILL_W, KIT_PILL_H, 8);
+      g.lineStyle(on ? 3 : 1.5, on ? INK : CREAM, on ? 1 : 0.6);
+      g.strokeRoundedRect(x, y - KIT_PILL_H / 2, KIT_PILL_W, KIT_PILL_H, 8);
+      // Amostra da camisa (com as listras, se houver).
+      const kit = kitOf(team, v);
+      const sx = x + 9;
+      const sy = y - 7;
+      if (kit.pattern.kind === 'stripes') {
+        for (let n = 0; n < 4; n++) {
+          g.fillStyle(kit.pattern.colors[n % 2]!, 1);
+          g.fillRect(sx + n * 3.5, sy, 3.5, 14);
+        }
+      } else {
+        g.fillStyle(kit.shirt, 1);
+        g.fillRect(sx, sy, 14, 14);
+      }
+      g.lineStyle(1.5, INK, 1);
+      g.strokeRect(sx, sy, 14, 14);
+      s.kitTexts[k]!
+        .setText(k === 0 ? '1 TITULAR' : '2 RESERVA')
+        .setPosition(x + KIT_PILL_W / 2 + 9, y)
+        .setColor(on ? INK_CSS : CREAM_CSS)
+        .setAlpha(on ? 1 : 0.75);
     });
   }
 
@@ -209,8 +326,19 @@ export class TeamSelectScene extends Phaser.Scene {
     if (this.leaving) return;
     const input = readMenuInput();
     let changed = false;
+    this.sides.forEach((s, i) => {
+      // O aviso de troca recusada some sozinho.
+      if (s.refusedUntil > 0 && t >= s.refusedUntil) {
+        s.refusedUntil = 0;
+        this.updateStatus(s, i as 0 | 1, t);
+      }
+    });
     input.players.forEach((p, i) => {
       const s = this.sides[i]!;
+      if (p.kit && !s.confirmed) {
+        this.toggleKit(i as 0 | 1, t);
+        changed = true;
+      }
       if (p.back) {
         if (s.confirmed) {
           s.confirmed = false;
@@ -233,6 +361,8 @@ export class TeamSelectScene extends Phaser.Scene {
       if (p.down) nr = (row + 1) % rows;
       if (nc !== col || nr !== row) {
         s.index = Math.min(TEAMS.length - 1, nr * COLS + nc);
+        // Time novo começa no uniforme automático.
+        s.pref = null;
         changed = true;
         audio.play('menu-mover');
       }
@@ -251,13 +381,13 @@ export class TeamSelectScene extends Phaser.Scene {
         audio.play('menu-confirmar');
       }
     }
-    if (changed) this.refresh();
+    if (changed) this.refresh(t);
 
     // Relógio real (o delta do Phaser é suavizado e atrasa em máquinas lentas).
     if (this.sides[0].confirmed && this.sides[1].confirmed) {
       this.readySince ??= t;
       if (t - this.readySince >= BOTH_READY_DELAY) {
-        this.leave('VersusScene', { teams: [this.teamOf(this.sides[0]), this.teamOf(this.sides[1])] });
+        this.leave('VersusScene', { teams: [this.teamOf(this.sides[0]), this.teamOf(this.sides[1])], kits: this.kits.variants });
       }
     } else {
       this.readySince = null;

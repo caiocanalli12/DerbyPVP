@@ -603,5 +603,8 @@ export const PREVIEW_BREATH_AMOUNT = 0.014;
 export const PREVIEW_SWAY_HZ = 0.22;
 export const PREVIEW_SWAY_DEG = 1.2;
 
+/** Tempo (s) do aviso quando uma troca de uniforme é recusada por cores parecidas. */
+export const KIT_REFUSED_FLASH = 1.4;
+
 /** Resolução do fundo de raios dos menus em relação à tela (é ampliado ao desenhar). */
 export const MENU_SUNBURST_RES = 0.6;

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { KEEPER_COLORS, KIT_CONFLICT_THRESHOLD } from '../src/config/constants';
 import { TEAMS } from '../src/data/teams';
 import type { TeamId } from '../src/data/teams';
-import { chooseKits, deltaE2000, kitDistance, readingColor, toLab } from '../src/sim/kits';
+import { chooseKits, chooseKitsWith, deltaE2000, kitDistance, kitsCompatible, readingColor, toLab } from '../src/sim/kits';
 
 describe('troca de uniforme por conflito de cores (obrigatórios)', () => {
   it.each([
@@ -81,5 +81,45 @@ describe('goleiros', () => {
       );
     const chosen = score(c.keeperColors[0], c.keeperColors[1]);
     for (const x of KEEPER_COLORS) for (const y of KEEPER_COLORS) if (x !== y) expect(score(x, y)).toBeLessThanOrEqual(chosen + 1e-9);
+  });
+});
+
+describe('escolha manual do uniforme 1/2', () => {
+  it('sem escolhas, é a regra automática', () => {
+    for (const a of TEAMS) {
+      for (const b of TEAMS) expect(chooseKitsWith(a.id, b.id, [null, null])).toEqual(chooseKits(a.id, b.id));
+    }
+  });
+
+  it('respeita o que foi fixado quando não há conflito', () => {
+    expect(chooseKitsWith('PAL', 'COR', [null, 'away'])!.variants).toEqual(['home', 'away']);
+    expect(chooseKitsWith('PAL', 'COR', ['home', 'away'])!.variants).toEqual(['home', 'away']);
+    expect(chooseKitsWith('PAL', 'COR', ['away', 'away'])!.variants).toEqual(['away', 'away']);
+  });
+
+  it('quem está no automático se ajusta à escolha do outro', () => {
+    // Palmeiras reserva (branco) x Corinthians titular (branco) conflitam: o J2 vai de reserva.
+    expect(chooseKitsWith('PAL', 'COR', ['away', null])!.variants).toEqual(['away', 'away']);
+    // Corinthians x Real: o J2 quer o titular branco; o J1 (automático) vai de reserva.
+    expect(chooseKitsWith('COR', 'RMA', [null, 'home'])!.variants).toEqual(['away', 'home']);
+  });
+
+  it('escolhas fixadas que conflitam não são aceitas', () => {
+    expect(chooseKitsWith('COR', 'RMA', ['home', 'home'])).toBeNull();
+    expect(chooseKitsWith('PAL', 'PAL', ['home', 'home'])).toBeNull();
+  });
+
+  it('nunca devolve uniformes conflitantes', () => {
+    const vs = [null, 'home', 'away'] as const;
+    for (const a of TEAMS) {
+      for (const b of TEAMS) {
+        for (const p1 of vs) {
+          for (const p2 of vs) {
+            const c = chooseKitsWith(a.id, b.id, [p1, p2]);
+            if (c) expect(kitsCompatible(a.id, c.variants[0], b.id, c.variants[1])).toBe(true);
+          }
+        }
+      }
+    }
   });
 });

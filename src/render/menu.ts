@@ -22,6 +22,8 @@ export interface MenuNav {
   right: boolean;
   confirm: boolean;
   back: boolean;
+  /** Troca de uniforme (seleção de times): H / `,`. */
+  kit: boolean;
 }
 
 export interface MenuInput {
@@ -46,6 +48,7 @@ export function readMenuInput(): MenuInput {
       right: p.right.pressed,
       confirm: p.pass.pressed,
       back: p.shoot.pressed,
+      kit: f.kit[i].pressed,
     };
   };
   return { players: [nav(0), nav(1)], enter: f.enter.pressed, pause: f.pause.pressed, frame: f };

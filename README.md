@@ -15,6 +15,8 @@ Feito com TypeScript, Phaser 3.80.1 e Vite. Tudo (jogadores, estádio, torcida, 
 
 Nos menus: J1 usa W/A/S/D, F confirma e G volta; J2 usa as setas, `;` confirma e `.` volta. Enter também confirma.
 
+Na escolha de times, cada jogador troca entre o uniforme 1 (titular) e o 2 (reserva): **H** para o J1 e **`,`** (vírgula) para o J2. Se a combinação deixar os dois times com cores parecidas, a troca é recusada (e quem não escolheu se ajusta sozinho).
+
 O `;` funciona tanto no teclado brasileiro (ABNT2, tecla ao lado do `.`) quanto no americano.
 
 > **Aviso sobre teclados:** alguns teclados mais simples não conseguem registrar muitas teclas apertadas ao mesmo tempo (*ghosting*). Se um comando "sumir" quando os dois jogadores apertam várias teclas juntos, é limitação do hardware do teclado, não um bug do jogo.

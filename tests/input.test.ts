@@ -50,6 +50,17 @@ describe('mapeamento de teclas', () => {
     expect(actionForEvent(ev('Backquote'))).toBe('debug');
   });
 
+  it('na seleção de times, H (J1) e , (J2) trocam o uniforme', () => {
+    expect(actionForEvent(ev('KeyH', 'h'))).toBe('p1Kit');
+    expect(actionForEvent(ev('Comma', ','))).toBe('p2Kit');
+    const k = new KeyboardInput();
+    k.keyDown(ev('KeyH', 'h'));
+    k.keyDown(ev('Comma', ','));
+    const f = k.snapshot();
+    expect(f.kit[0].pressed).toBe(true);
+    expect(f.kit[1].pressed).toBe(true);
+  });
+
   it('teclas irrelevantes são ignoradas', () => {
     expect(actionForEvent(ev('KeyQ', 'q'))).toBeNull();
   });

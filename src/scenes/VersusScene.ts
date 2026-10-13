@@ -11,7 +11,8 @@ import type { ArtStep } from '../art/match-art';
 import { crestKey, generateCrestTextures } from '../art/crest-art';
 import { cloudKey, generateWeatherTextures, moonKey, sunKey } from '../art/weather-art';
 import { CREAM, CREAM_CSS, FONT_TEXT, FONT_TITLE, INK, INK_CSS } from '../art/style';
-import { chooseKits } from '../sim/kits';
+import { chooseKits, kitChoiceFor } from '../sim/kits';
+import type { KitVariant } from '../sim/kits';
 import { FilmView, filmEffectsEnabled } from '../render/FilmView';
 import { addSunburst, addTitle } from '../render/menu';
 import type { MatchConfig } from './MatchScene';
@@ -20,6 +21,8 @@ export interface VersusData {
   teams: [TeamId, TeamId];
   /** Semente da arte (mantida na revanche para reaproveitar as texturas). */
   seed?: number;
+  /** Uniformes escolhidos na seleção (sem isso, a regra automática). */
+  kits?: [KitVariant, KitVariant];
 }
 
 /** Instante (s) do choque dos escudos e onde eles param (distância do centro). */
@@ -66,7 +69,7 @@ export class VersusScene extends Phaser.Scene {
     const seed = data.seed ?? (Date.now() >>> 0);
     const rng = new Rng((Date.now() ^ 0x5eed) >>> 0);
     const weather: WeatherId = randomWeather(() => rng.next());
-    this.config = { teams: data.teams, seed, weather };
+    this.config = { teams: data.teams, seed, weather, kits: data.kits };
   }
 
   create(): void {
@@ -113,7 +116,7 @@ export class VersusScene extends Phaser.Scene {
     this.film = new FilmView(this, filmEffectsEnabled(this));
 
     // Texturas da partida (só os dois times, nos uniformes que vão ser usados).
-    const kits = chooseKits(t1, t2);
+    const kits = this.config.kits ? kitChoiceFor(t1, t2, this.config.kits) : chooseKits(t1, t2);
     const signature = artSignature(this.config.teams, kits, this.config.seed);
     this.gen = null;
     if (!matchArtReady(this, signature)) {
