@@ -1,0 +1,46 @@
+# Derby PVP
+
+Futebol 5x5 para navegador, para **2 jogadores no mesmo teclado**, com visual de desenho animado dos anos 1930.
+
+Feito com TypeScript, Phaser 3.80.1 e Vite. Tudo (jogadores, estádio, torcida, placas) é desenhado por código: não há imagens externas.
+
+## Controles
+
+| Ação | Jogador 1 (time da esquerda) | Jogador 2 (time da direita) |
+|---|---|---|
+| Mover | W A S D | Setas |
+| Passe | F | `;` (ponto e vírgula) |
+| Chute (segure para carregar) / dividida sem a bola | G | `.` (ponto) |
+| Pausa | Esc ou P | Esc ou P |
+
+Nos menus: J1 usa W/A/S/D, F confirma e G volta; J2 usa as setas, `;` confirma e `.` volta. Enter também confirma.
+
+O `;` funciona tanto no teclado brasileiro (ABNT2, tecla ao lado do `.`) quanto no americano.
+
+> **Aviso sobre teclados:** alguns teclados mais simples não conseguem registrar muitas teclas apertadas ao mesmo tempo (*ghosting*). Se um comando "sumir" quando os dois jogadores apertam várias teclas juntos, é limitação do hardware do teclado, não um bug do jogo.
+
+## Rodando localmente
+
+Requer Node.js 20 ou mais novo.
+
+```bash
+npm install
+npm run dev      # servidor de desenvolvimento (abre em http://localhost:5173)
+npm run build    # checagem de tipos (TypeScript strict) + build de produção em dist/
+npm run test     # testes da simulação (Vitest)
+npm run preview  # serve o build de dist/ localmente
+```
+
+## Publicando no GitHub Pages
+
+O deploy é automático via GitHub Actions (`.github/workflows/deploy.yml`): a cada push na branch `main`, os testes rodam, o build é gerado e a pasta `dist` é publicada.
+
+Para ativar (só uma vez):
+
+1. Crie um repositório no GitHub e envie o projeto para a branch `main`.
+2. No repositório, vá em **Settings → Pages**.
+3. Em **Build and deployment → Source**, escolha **GitHub Actions**.
+4. Faça um push na `main` (ou rode o workflow manualmente em **Actions → Deploy no GitHub Pages → Run workflow**).
+5. Quando o workflow terminar, o endereço aparece em **Settings → Pages** (algo como `https://SEU-USUARIO.github.io/NOME-DO-REPO/`).
+
+O `vite.config.ts` usa `base: './'`, então o jogo funciona em qualquer subpasta do Pages sem configuração extra.
