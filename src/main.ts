@@ -6,6 +6,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from './config/constants';
 import { FONT_TEXT, FONT_TITLE } from './art/style';
 import { BootScene } from './scenes/BootScene';
 import { MatchScene } from './scenes/MatchScene';
+import { keyboard } from './core/input';
 
 /** Força o download das fontes empacotadas e espera ficarem prontas. */
 async function loadFonts(): Promise<void> {
@@ -24,6 +25,9 @@ async function loadFonts(): Promise<void> {
 async function start(): Promise<void> {
   await loadFonts();
   document.getElementById('loading')?.remove();
+
+  // Teclado próprio (KeyboardEvent.code + ';' do ABNT2), ligado à janela.
+  keyboard.attach(window);
 
   new Phaser.Game({
     type: Phaser.AUTO,

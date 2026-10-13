@@ -64,3 +64,36 @@ export const PROJ_Y_SQUASH = 0.6;
 /** Achatamento extra do Y no fundo / na frente (perspectiva leve). */
 export const PROJ_Y_DEPTH_BACK = 0.92;
 export const PROJ_Y_DEPTH_FRONT = 1.0;
+
+// ---------------------------------------------------------------------------
+// Jogadores
+// ---------------------------------------------------------------------------
+
+/** Raio do círculo de colisão do corpo. */
+export const PLAYER_RADIUS = 0.4;
+/** Velocidade máxima de corrida. */
+export const PLAYER_RUN_SPEED = 6.5;
+/** Fração da velocidade ao conduzir a bola. */
+export const PLAYER_DRIBBLE_SPEED_FACTOR = 0.9;
+/** Aceleração ao ganhar velocidade (m/s²): chega no máximo em ~0,15 s. */
+export const PLAYER_ACCEL = 45;
+/** Desaceleração ao frear ou inverter (m/s²): resposta firme, sem "gelo". */
+export const PLAYER_BRAKE = 65;
+/** Velocidade de giro do corpo (rad/s). */
+export const PLAYER_TURN_RATE = 16;
+/** Fração da sobreposição corrigida por passo na separação suave entre jogadores. */
+export const PLAYER_SEPARATION_STIFFNESS = 0.35;
+/** Altura do jogador (para a bola passar por cima ou bater no corpo). */
+export const PLAYER_HEIGHT = 1.75;
+
+/**
+ * Formação base para o time que ataca para a direita (defende o gol x = 0).
+ * O outro time usa o reflexo pelo centro do campo: (40 - x, 20 - y).
+ */
+export const FORMATION = {
+  GK: { x: 1.5, y: 10 },
+  FIXO: { x: 9, y: 10 },
+  ALA_E: { x: 15, y: 4 },
+  ALA_D: { x: 15, y: 16 },
+  ATA: { x: 18.5, y: 10 },
+} as const;
