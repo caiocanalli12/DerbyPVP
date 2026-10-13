@@ -99,3 +99,5 @@ Título → Seleção (J1 esquerda / J2 direita, confirmar/desfazer) → VS (2,5
 ## Decisões técnicas registradas
 - Texturas procedurais são desenhadas com a API Canvas 2D em texturas de canvas do Phaser (`textures.createCanvas`) geradas no carregamento: o `Graphics` do Phaser não tem recorte (clip), gradiente no modo canvas nem texto com fonte, que são necessários para listras de uniforme, céu e placas. Continua 100% desenhado por código, sem imagens externas.
 - Vários quadros de animação vão para um mesmo canvas (atlas) para reduzir trocas de textura.
+- Animações que precisam bater com o relógio real (ex.: tela VS, que gera texturas em paralelo) são calculadas no `update` a partir do tempo real, não com tweens: o delta do Phaser é suavizado/limitado e atrasa em quadros longos.
+- No `SHUTDOWN` da cena o Phaser destrói as câmeras antes dos nossos ouvintes: o `destroy()` das views não pode usar `cameras.main` sem checar se ainda existe.

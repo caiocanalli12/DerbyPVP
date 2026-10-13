@@ -11,7 +11,6 @@ import {
 } from '../config/constants';
 import { isTackleActive, tackleFootTip } from '../sim/tackle';
 import { keyboard } from '../core/input';
-import type { InputFrame } from '../core/input';
 import { DEPTH_UI } from '../core/projection';
 import { audio } from '../audio/AudioManager';
 import { BallView } from '../render/BallView';
@@ -30,7 +29,7 @@ import { PowerArcView } from '../render/PowerArcView';
 import { IntertitleView } from '../render/IntertitleView';
 import { EffectsView } from '../render/EffectsView';
 import { GoalTextView } from '../render/GoalTextView';
-import { FilmView } from '../render/FilmView';
+import { FilmView, filmEffectsEnabled } from '../render/FilmView';
 import { CrowdView } from '../render/CrowdView';
 import type { CrowdMood } from '../render/CrowdView';
 import { SponsorView } from '../render/SponsorView';
@@ -42,17 +41,12 @@ import { CROWD_ATTACK_DISTANCE, GOAL_FLASH_MS, GOAL_SHAKE_INTENSITY, GOAL_SHAKE_
 import { goalCenter } from '../sim/field';
 import { attackedGoal } from '../sim/world';
 import { Rng } from '../core/rng';
-import { createMatch, drainMatchEvents, PENALTY_GOAL, stepMatch } from '../sim/match';
+import { createMatch, drainMatchEvents, matchWinner, PENALTY_GOAL, stepMatch } from '../sim/match';
+import { goalsOf } from '../sim/penalties';
+import { PAUSE_EVENTS } from './PauseScene';
 import type { Match } from '../sim/match';
 import { drainEvents, getPlayer } from '../sim/world';
-import { CREAM_CSS, FONT_TITLE, INK_CSS } from '../art/style';
-
-/** Preferência dos efeitos de filme (menu de pausa); ?film=0 desliga para testar. */
-export function filmEffectsEnabled(scene: Phaser.Scene): boolean {
-  const stored = scene.registry.get('filmFx');
-  if (typeof stored === 'boolean') return stored;
-  return new URLSearchParams(window.location.search).get('film') !== '0';
-}
+import { CREAM_CSS, FONT_TITLE } from '../art/style';
 
 /** Configuração de uma partida (vem da seleção de times e da tela VS). */
 export interface MatchConfig {
@@ -88,9 +82,9 @@ export class MatchScene extends Phaser.Scene {
   private effects!: EffectsView;
   private goalText!: GoalTextView;
   private film!: FilmView;
-  private pauseText!: Phaser.GameObjects.Text;
   private accumulator = 0;
-  private paused = false;
+  private skipDelta = false;
+  private finished = false;
 
   constructor() {
     super('MatchScene');
@@ -113,8 +107,10 @@ export class MatchScene extends Phaser.Scene {
 
   create(): void {
     this.ready = false;
+    this.loading = null;
     this.kits = chooseKits(this.config.teams[0], this.config.teams[1]);
-    this.match = createMatch(this.config.seed);
+    // A semente da arte fica fixa (revanche reaproveita as texturas); a da partida varia.
+    this.match = createMatch((this.config.seed ^ Date.now()) >>> 0);
     const signature = artSignature(this.config.teams, this.kits, this.config.seed);
     if (matchArtReady(this, signature)) {
       this.buildViews();
@@ -166,7 +162,7 @@ export class MatchScene extends Phaser.Scene {
 
   private buildViews(): void {
     this.accumulator = 0;
-    this.paused = false;
+    this.skipDelta = false;
     this.cameras.main.setBackgroundColor('#000000');
     const shirts: [number, number] = [this.kits.kits[0].shirt, this.kits.kits[1].shirt];
 
@@ -188,24 +184,17 @@ export class MatchScene extends Phaser.Scene {
     this.goalText = new GoalTextView(this, shirts);
     this.film = new FilmView(this, filmEffectsEnabled(this));
 
-    this.pauseText = this.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'PAUSADO', {
-        fontFamily: FONT_TITLE,
-        fontSize: '72px',
-        color: CREAM_CSS,
-        stroke: INK_CSS,
-        strokeThickness: 10,
-      })
-      .setOrigin(0.5)
-      .setDepth(DEPTH_UI + 20)
-      .setVisible(false);
-
     // Descarta teclas apertadas antes da partida começar.
     keyboard.snapshot();
     this.ready = true;
+    this.finished = false;
+    this.game.events.on(PAUSE_EVENTS.resume, this.onResume, this);
+    this.game.events.on(PAUSE_EVENTS.filmToggle, this.onFilmToggle, this);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.ready = false;
+      this.game.events.off(PAUSE_EVENTS.resume, this.onResume, this);
+      this.game.events.off(PAUSE_EVENTS.filmToggle, this.onFilmToggle, this);
       this.debug.destroy();
       this.playersView.destroy();
       this.ballView.destroy();
@@ -234,30 +223,29 @@ export class MatchScene extends Phaser.Scene {
     if (!this.ready) return;
     // Tempo real do quadro: o `delta` do Phaser é suavizado e fica preso em ~16,7 ms
     // quando o FPS cai, o que deixaria o jogo em câmera lenta em máquinas lentas.
-    const frameDt = Math.min(this.game.loop.rawDelta / 1000, MAX_FRAME_DT);
+    // Logo depois de voltar da pausa, o quadro é ignorado (não "recupera" o tempo parado).
+    const frameDt = this.skipDelta ? 0 : Math.min(this.game.loop.rawDelta / 1000, MAX_FRAME_DT);
+    this.skipDelta = false;
 
-    if (this.paused) {
-      this.handleGlobalKeys(keyboard.snapshot());
-    } else {
-      this.accumulator += frameDt;
-      while (this.accumulator >= SIM_DT) {
-        const frame = keyboard.snapshot();
-        this.handleGlobalKeys(frame);
-        if (this.paused) {
-          this.accumulator = 0;
-          break;
-        }
-        stepMatch(this.match, frame.players, SIM_DT);
-        this.accumulator -= SIM_DT;
+    this.accumulator += frameDt;
+    while (this.accumulator >= SIM_DT) {
+      const frame = keyboard.snapshot();
+      if (frame.debug.pressed) this.debug.toggle();
+      if ((frame.blurred || frame.pause.pressed) && !this.finished) {
+        this.openPause();
+        return;
       }
+      stepMatch(this.match, frame.players, SIM_DT);
+      this.accumulator -= SIM_DT;
     }
 
     this.consumeEvents();
+    if (this.match.over) this.goToResult();
 
     const world = this.match.world;
-    const alpha = this.paused ? 1 : this.accumulator / SIM_DT;
+    const alpha = this.accumulator / SIM_DT;
     const now = this.time.now / 1000;
-    const renderDt = this.paused ? 0 : frameDt;
+    const renderDt = frameDt;
     this.playersView.update(this.match, alpha, now, renderDt);
     this.ballView.update(world.ball, alpha, now, renderDt);
     this.fieldView.update(now);
@@ -277,15 +265,42 @@ export class MatchScene extends Phaser.Scene {
     this.drawDebug();
   }
 
-  private handleGlobalKeys(frame: InputFrame): void {
-    if (frame.debug.pressed) this.debug.toggle();
-    if (frame.blurred) this.setPaused(true);
-    else if (frame.pause.pressed) this.setPaused(!this.paused);
+  /** Pausa a partida e abre o menu de pausa por cima. */
+  private openPause(): void {
+    this.accumulator = 0;
+    this.scene.launch('PauseScene', { config: this.config });
+    this.scene.pause();
   }
 
-  private setPaused(paused: boolean): void {
-    this.paused = paused;
-    this.pauseText.setVisible(paused);
+  private onResume(): void {
+    // Teclas apertadas durante a pausa não valem na partida.
+    keyboard.snapshot();
+    this.accumulator = 0;
+    this.skipDelta = true;
+  }
+
+  private onFilmToggle(on: boolean): void {
+    this.film.setEnabled(on);
+  }
+
+  /** Fim de jogo: vai para a tela de resultado. */
+  private goToResult(): void {
+    if (this.finished) return;
+    this.finished = true;
+    const m = this.match;
+    const winner = matchWinner(m) ?? 0;
+    const pens = m.shootout ? ([goalsOf(m.shootout, 0), goalsOf(m.shootout, 1)] as [number, number]) : null;
+    this.cameras.main.fadeOut(300, 20, 12, 8);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () =>
+      this.scene.start('ResultScene', {
+        teams: this.config.teams,
+        seed: this.config.seed,
+        score: [m.score[0], m.score[1]],
+        penalties: pens,
+        winner,
+        colors: [this.kits.kits[0].shirt, this.kits.kits[1].shirt],
+      }),
+    );
   }
 
   /** Ânimo de cada metade da torcida (esquerda = J1, direita = J2). */

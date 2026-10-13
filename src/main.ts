@@ -7,6 +7,11 @@ import { FONT_TEXT, FONT_TITLE } from './art/style';
 import { BootScene } from './scenes/BootScene';
 import { MatchScene } from './scenes/MatchScene';
 import { ArtPreviewScene } from './scenes/ArtPreviewScene';
+import { TitleScene } from './scenes/TitleScene';
+import { TeamSelectScene } from './scenes/TeamSelectScene';
+import { VersusScene } from './scenes/VersusScene';
+import { PauseScene } from './scenes/PauseScene';
+import { ResultScene } from './scenes/ResultScene';
 import { keyboard } from './core/input';
 
 /** Força o download das fontes empacotadas e espera ficarem prontas. */
@@ -49,7 +54,7 @@ async function start(): Promise<void> {
     input: {
       keyboard: false,
     },
-    scene: [BootScene, MatchScene, ArtPreviewScene],
+    scene: [BootScene, TitleScene, TeamSelectScene, VersusScene, MatchScene, PauseScene, ResultScene, ArtPreviewScene],
   });
 
   // Ferramenta de inspeção: com ?debug na URL, o jogo fica acessível no console.

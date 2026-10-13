@@ -228,6 +228,8 @@ export class WeatherView {
     for (const c of this.cones) c.destroy();
     this.rain?.destroy();
     this.skyMask.destroy();
-    if (this.weather === 'rain' && this.scene.game.renderer.type === Phaser.WEBGL) this.scene.cameras.main.postFX.clear();
+    // Ao sair da cena o Phaser já destruiu a câmera (e o filtro junto): só limpa se ela ainda existir.
+    const cam = this.scene.cameras.main as Phaser.Cameras.Scene2D.Camera | undefined;
+    if (this.weather === 'rain' && this.scene.game.renderer.type === Phaser.WEBGL) cam?.postFX.clear();
   }
 }

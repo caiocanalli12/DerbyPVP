@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 
 /**
  * Inicialização. As fontes já estão prontas (main.ts espera document.fonts.ready).
- * Nas próximas fases, gera as texturas comuns e segue para o menu.
+ * Segue para a tela inicial.
  */
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -15,6 +15,12 @@ export class BootScene extends Phaser.Scene {
       this.scene.start('ArtPreviewScene');
       return;
     }
-    this.scene.start('MatchScene');
+    // Atalho de teste: ?t1=XXX&t2=YYY (ou ?weather=...) vai direto para a partida.
+    const q = new URLSearchParams(window.location.search);
+    if (q.has('t1') || q.has('t2') || q.has('weather')) {
+      this.scene.start('MatchScene');
+      return;
+    }
+    this.scene.start('TitleScene');
   }
 }

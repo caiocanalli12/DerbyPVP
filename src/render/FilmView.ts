@@ -21,6 +21,17 @@ import { DEPTH_UI } from '../core/projection';
 import { Rng } from '../core/rng';
 import { DUST_KEY, generateFilmTextures, GRAIN_VARIANTS, grainKey, PAPER_KEY, SCRATCH_KEY, VIGNETTE_KEY } from '../art/film-fx';
 
+/** Preferência dos efeitos de filme (menu de pausa); ?film=0 desliga para testar. */
+export function filmEffectsEnabled(scene: Phaser.Scene): boolean {
+  const stored = scene.registry.get('filmFx');
+  if (typeof stored === 'boolean') return stored;
+  return new URLSearchParams(window.location.search).get('film') !== '0';
+}
+
+export function setFilmEffectsEnabled(scene: Phaser.Scene, on: boolean): void {
+  scene.registry.set('filmFx', on);
+}
+
 /** Por cima de tudo (até da interface), mas bem leve. */
 const DEPTH_FILM = DEPTH_UI + 100;
 /** O papel envelhecido fica sobre o campo e o estádio, abaixo da interface. */

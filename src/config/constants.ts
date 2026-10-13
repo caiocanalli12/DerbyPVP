@@ -532,3 +532,10 @@ export const FILM_FLICKER = 0.03;
 /** Opacidade da vinheta e do papel envelhecido. */
 export const FILM_VIGNETTE_ALPHA = 0.85;
 export const FILM_PAPER_ALPHA = 0.5;
+
+// ---------------------------------------------------------------------------
+// Menus
+// ---------------------------------------------------------------------------
+
+/** Duração da tela VS (s). */
+export const VERSUS_DURATION = 2.5;
