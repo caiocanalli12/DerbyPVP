@@ -3,7 +3,7 @@
  * (posição interpolada, ordenação por Y, sombra no chão, animação a 12–15 qps).
  */
 import Phaser from 'phaser';
-import { PLAYER_RADIUS } from '../config/constants';
+import { CELEBRATION_HOP, PLAYER_RADIUS } from '../config/constants';
 import { DEPTH_SHADOWS, depthFor, PPM, project } from '../core/projection';
 import { displayScale, ORIGIN_TALL, ORIGIN_WIDE } from '../art/player-art';
 import { playerTextureKey } from '../art/match-art';
@@ -127,10 +127,12 @@ export class PlayersView {
         dt,
       );
       const origin = a.wide ? ORIGIN_WIDE : ORIGIN_TALL;
+      // O autor do gol pula de alegria.
+      const hop = scorer === p.id ? Math.abs(Math.sin(timeSec * 9)) * CELEBRATION_HOP * s : 0;
       g.sprite
         .setFrame(a.frame)
         .setOrigin(origin.x, origin.y)
-        .setPosition(ground.x, ground.y)
+        .setPosition(ground.x, ground.y - hop)
         .setScale(this.scale * s * a.sx, this.scale * s * a.sy)
         .setFlipX(a.flipX)
         .setRotation(a.rotation)

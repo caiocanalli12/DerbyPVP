@@ -28,6 +28,9 @@ import { IndicatorView } from '../render/IndicatorView';
 import { ScoreboardView } from '../render/ScoreboardView';
 import { PowerArcView } from '../render/PowerArcView';
 import { IntertitleView } from '../render/IntertitleView';
+import { EffectsView } from '../render/EffectsView';
+import { GoalTextView } from '../render/GoalTextView';
+import { FilmView } from '../render/FilmView';
 import { CrowdView } from '../render/CrowdView';
 import type { CrowdMood } from '../render/CrowdView';
 import { SponsorView } from '../render/SponsorView';
@@ -35,14 +38,21 @@ import { WeatherView } from '../render/WeatherView';
 import { generateCrowdTexture } from '../art/crowd-art';
 import { isWeatherId, randomWeather } from '../data/weather';
 import type { WeatherId } from '../data/weather';
-import { CROWD_ATTACK_DISTANCE } from '../config/constants';
+import { CROWD_ATTACK_DISTANCE, GOAL_FLASH_MS, GOAL_SHAKE_INTENSITY, GOAL_SHAKE_MS } from '../config/constants';
 import { goalCenter } from '../sim/field';
 import { attackedGoal } from '../sim/world';
 import { Rng } from '../core/rng';
 import { createMatch, drainMatchEvents, PENALTY_GOAL, stepMatch } from '../sim/match';
 import type { Match } from '../sim/match';
 import { drainEvents, getPlayer } from '../sim/world';
-import { CREAM_CSS, FONT_TEXT, FONT_TITLE, INK_CSS } from '../art/style';
+import { CREAM_CSS, FONT_TITLE, INK_CSS } from '../art/style';
+
+/** Preferência dos efeitos de filme (menu de pausa); ?film=0 desliga para testar. */
+export function filmEffectsEnabled(scene: Phaser.Scene): boolean {
+  const stored = scene.registry.get('filmFx');
+  if (typeof stored === 'boolean') return stored;
+  return new URLSearchParams(window.location.search).get('film') !== '0';
+}
 
 /** Configuração de uma partida (vem da seleção de times e da tela VS). */
 export interface MatchConfig {
@@ -75,7 +85,9 @@ export class MatchScene extends Phaser.Scene {
   private scoreboard!: ScoreboardView;
   private powerArc!: PowerArcView;
   private intertitle!: IntertitleView;
-  private bannerText!: Phaser.GameObjects.Text;
+  private effects!: EffectsView;
+  private goalText!: GoalTextView;
+  private film!: FilmView;
   private pauseText!: Phaser.GameObjects.Text;
   private accumulator = 0;
   private paused = false;
@@ -172,14 +184,9 @@ export class MatchScene extends Phaser.Scene {
     this.debug = new DebugOverlay(this);
     this.scoreboard = new ScoreboardView(this, this.config.teams, shirts);
     this.intertitle = new IntertitleView(this);
-    const style = { fontFamily: FONT_TEXT, color: CREAM_CSS, stroke: INK_CSS, strokeThickness: 6 };
-
-    // "GOOOL!" (a animação elástica completa vem na fase 13).
-    this.bannerText = this.add
-      .text(GAME_WIDTH / 2, 200, '', { ...style, fontFamily: FONT_TITLE, fontSize: '96px', strokeThickness: 12 })
-      .setOrigin(0.5)
-      .setDepth(DEPTH_UI + 5)
-      .setVisible(false);
+    this.effects = new EffectsView(this);
+    this.goalText = new GoalTextView(this, shirts);
+    this.film = new FilmView(this, filmEffectsEnabled(this));
 
     this.pauseText = this.add
       .text(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'PAUSADO', {
@@ -211,6 +218,9 @@ export class MatchScene extends Phaser.Scene {
       this.scoreboard.destroy();
       this.powerArc.destroy();
       this.intertitle.destroy();
+      this.effects.destroy();
+      this.goalText.destroy();
+      this.film.destroy();
     });
   }
 
@@ -260,7 +270,10 @@ export class MatchScene extends Phaser.Scene {
     this.powerArc.update(this.match, alpha, now);
     this.scoreboard.update(this.match, now);
     this.intertitle.update(this.match.intertitle, now);
-    this.drawHud();
+    this.effects.update(this.match, alpha, now, renderDt);
+    if (this.match.phase !== 'COMEMORACAO_GOL') this.goalText.hide();
+    this.goalText.update(now);
+    this.film.update(now, renderDt);
     this.drawDebug();
   }
 
@@ -300,6 +313,7 @@ export class MatchScene extends Phaser.Scene {
   /** Eventos da simulação -> áudio (vazio por enquanto) e efeitos. */
   private consumeEvents(): void {
     for (const e of drainEvents(this.match.world)) {
+      this.effects.onEvent(e, this.match);
       if (e.type === 'goal') this.fieldView.goalScored(e.side, this.time.now / 1000);
       this.playersView.onEvent(e, this.match);
       if (e.type === 'pass') audio.play('passe');
@@ -313,6 +327,10 @@ export class MatchScene extends Phaser.Scene {
       else if (e.type === 'finalWhistle' || e.type === 'periodEnd') audio.play('apito-final');
       else if (e.type === 'goal') {
         audio.play('gol');
+        // Comemoração: "GOOOL!" elástico, tremor e flash (a torcida e o autor já reagem).
+        this.goalText.show(e.goal.team, this.time.now / 1000);
+        this.cameras.main.shake(GOAL_SHAKE_MS, GOAL_SHAKE_INTENSITY);
+        this.cameras.main.flash(GOAL_FLASH_MS, 255, 250, 235);
       }
       else if (e.type === 'penaltyKick') {
         audio.play('chute');
@@ -321,13 +339,9 @@ export class MatchScene extends Phaser.Scene {
       else if (e.type === 'penaltyResult' && e.result === 'goal') {
         audio.play('gol');
         this.fieldView.goalScored(PENALTY_GOAL, this.time.now / 1000);
+        this.cameras.main.shake(GOAL_SHAKE_MS * 0.6, GOAL_SHAKE_INTENSITY * 0.6);
       }
     }
-  }
-
-  private drawHud(): void {
-    const m = this.match;
-    this.bannerText.setText('GOOOL!').setVisible(m.phase === 'COMEMORACAO_GOL');
   }
 
   private drawDebug(): void {

@@ -489,3 +489,46 @@ export const RAIN_SPLASHES_PER_SEC = 40;
 /** Rede: duração (s) e amplitude (m) do balanço depois do gol. */
 export const NET_WAVE_TIME = 1.6;
 export const NET_WAVE_AMPLITUDE = 0.38;
+
+// ---------------------------------------------------------------------------
+// Efeitos visuais
+// ---------------------------------------------------------------------------
+
+/** Rastro de velocidade: só acima desta velocidade (m/s) e comprimento dos traços (s de voo). */
+export const TRAIL_MIN_SPEED = 15;
+export const TRAIL_LENGTH_TIME = 0.09;
+/** Partículas de grama: a cada quantos metros corridos e quantas no carrinho. */
+export const GRASS_STEP_DISTANCE = 1.6;
+export const GRASS_RUN_MIN_SPEED = 4;
+export const GRASS_SLIDE_BURST = 14;
+export const GRASS_PARTICLE_LIFE = 0.45;
+/** Linhas de impacto (dividida certa, defesa do goleiro): duração (s). */
+export const IMPACT_TIME = 0.28;
+/** Gol: tremor (ms, intensidade) e flash branco (ms). */
+export const GOAL_SHAKE_MS = 420;
+export const GOAL_SHAKE_INTENSITY = 0.009;
+export const GOAL_FLASH_MS = 160;
+/** "GOOOL!": atraso entre letras (s) e tamanho (px). */
+export const GOAL_TEXT_LETTER_DELAY = 0.07;
+export const GOAL_TEXT_SIZE = 120;
+/** Pulo extra do autor do gol na comemoração (px). */
+export const CELEBRATION_HOP = 7;
+
+// ---------------------------------------------------------------------------
+// Filme antigo (camada por cima de tudo, desligável no menu de pausa)
+// ---------------------------------------------------------------------------
+
+/** Opacidade do grão e trocas por segundo. */
+export const FILM_GRAIN_ALPHA = 0.16;
+export const FILM_GRAIN_FPS = 24;
+/** Riscos verticais: chance por segundo de aparecer um e duração (s). */
+export const FILM_SCRATCH_RATE = 1.4;
+export const FILM_SCRATCH_TIME = 0.35;
+/** Poeira: chance por segundo e duração (s). */
+export const FILM_DUST_RATE = 3;
+export const FILM_DUST_TIME = 0.12;
+/** Flicker: variação máxima de brilho global (±). */
+export const FILM_FLICKER = 0.03;
+/** Opacidade da vinheta e do papel envelhecido. */
+export const FILM_VIGNETTE_ALPHA = 0.85;
+export const FILM_PAPER_ALPHA = 0.5;
