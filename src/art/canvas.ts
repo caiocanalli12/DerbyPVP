@@ -1,7 +1,7 @@
 /**
  * Infraestrutura para texturas desenhadas por código (Canvas 2D) e registradas no Phaser.
  */
-import Phaser from 'phaser';
+import type Phaser from 'phaser';
 import { Rng } from '../core/rng';
 
 export type Ctx = CanvasRenderingContext2D;

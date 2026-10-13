@@ -17,8 +17,13 @@ import { audio } from '../audio/AudioManager';
 import { BallView } from '../render/BallView';
 import { DebugOverlay } from '../render/DebugOverlay';
 import { FieldView } from '../render/FieldView';
-import { GK_COLORS, PlayersView, TEAM_COLORS } from '../render/PlayersView';
+import { PlayersView } from '../render/PlayersView';
 import { PenaltyView } from '../render/PenaltyView';
+import { artSignature, buildLooks, generateMatchArt, matchArtReady } from '../art/match-art';
+import { chooseKits } from '../sim/kits';
+import type { KitChoice } from '../sim/kits';
+import { getTeam, isTeamId } from '../data/teams';
+import type { TeamId } from '../data/teams';
 import { IndicatorView } from '../render/IndicatorView';
 import { createMatch, drainMatchEvents, formatClock, PERIOD_LABEL, stepMatch } from '../sim/match';
 import type { Match } from '../sim/match';
@@ -28,7 +33,19 @@ import { CREAM_CSS, FONT_TEXT, FONT_TITLE, INK_CSS } from '../art/style';
 /**
  * Partida: laço de passo fixo, espelhamento da simulação e interface provisória.
  */
+/** Configuração de uma partida (vem da seleção de times). */
+export interface MatchConfig {
+  teams: [TeamId, TeamId];
+  seed: number;
+}
+
 export class MatchScene extends Phaser.Scene {
+  private config!: MatchConfig;
+  private kits!: KitChoice;
+  private loading: Generator<number, void, void> | null = null;
+  private loadingGfx: Phaser.GameObjects.Graphics | null = null;
+  private loadingText: Phaser.GameObjects.Text | null = null;
+  private ready = false;
   private match!: Match;
   private debug!: DebugOverlay;
   private playersView!: PlayersView;
@@ -49,17 +66,81 @@ export class MatchScene extends Phaser.Scene {
     super('MatchScene');
   }
 
+  init(data: Partial<MatchConfig>): void {
+    // Sem menus (ou para depurar): ?t1=PAL&t2=COR na URL.
+    const q = new URLSearchParams(window.location.search);
+    const pick = (v: string | null | undefined, fallback: TeamId): TeamId =>
+      v && isTeamId(v.toUpperCase()) ? (v.toUpperCase() as TeamId) : fallback;
+    this.config = {
+      teams: data.teams ?? [pick(q.get('t1'), 'PAL'), pick(q.get('t2'), 'COR')],
+      seed: data.seed ?? (Date.now() >>> 0),
+    };
+  }
+
   create(): void {
-    this.match = createMatch(Date.now() >>> 0);
+    this.ready = false;
+    this.kits = chooseKits(this.config.teams[0], this.config.teams[1]);
+    this.match = createMatch(this.config.seed);
+    const signature = artSignature(this.config.teams, this.kits, this.config.seed);
+    if (matchArtReady(this, signature)) {
+      this.buildViews();
+    } else {
+      const looks = buildLooks(this.config.teams, this.kits, this.config.seed);
+      this.loading = generateMatchArt(this, looks, [this.kits.kits[0].shirt, this.kits.kits[1].shirt], signature);
+      this.showLoading();
+    }
+  }
+
+  /** Tela de carregamento estilizada enquanto as texturas dos dois times são desenhadas. */
+  private showLoading(): void {
+    this.cameras.main.setBackgroundColor('#14100c');
+    this.loadingGfx = this.add.graphics().setDepth(DEPTH_UI + 50);
+    this.loadingText = this.add
+      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 50, 'PREPARANDO OS TIMES…', {
+        fontFamily: FONT_TITLE,
+        fontSize: '44px',
+        color: CREAM_CSS,
+      })
+      .setOrigin(0.5)
+      .setDepth(DEPTH_UI + 51);
+    this.drawLoading(0);
+  }
+
+  private drawLoading(progress: number): void {
+    const g = this.loadingGfx;
+    if (!g) return;
+    g.clear();
+    const w = 520;
+    const x = GAME_WIDTH / 2 - w / 2;
+    const y = GAME_HEIGHT / 2 + 10;
+    g.lineStyle(3, 0xf3e6c4, 1);
+    g.strokeRoundedRect(x - 8, y - 8, w + 16, 40, 10);
+    g.fillStyle(0xf3e6c4, 1);
+    g.fillRoundedRect(x, y, Math.max(8, w * progress), 24, 6);
+    const [a, b] = this.config.teams;
+    this.loadingText?.setText(`${getTeam(a).name.toUpperCase()} × ${getTeam(b).name.toUpperCase()}`);
+  }
+
+  private finishLoading(): void {
+    this.loadingGfx?.destroy();
+    this.loadingText?.destroy();
+    this.loadingGfx = null;
+    this.loadingText = null;
+    this.loading = null;
+    this.buildViews();
+  }
+
+  private buildViews(): void {
     this.accumulator = 0;
     this.paused = false;
-    const world = this.match.world;
+    this.cameras.main.setBackgroundColor('#000000');
+    const shirts: [number, number] = [this.kits.kits[0].shirt, this.kits.kits[1].shirt];
 
     new FieldView(this);
-    this.playersView = new PlayersView(this, world);
+    this.playersView = new PlayersView(this, this.match);
     this.ballView = new BallView(this);
-    this.indicators = new IndicatorView(this, TEAM_COLORS);
-    this.penaltyView = new PenaltyView(this, TEAM_COLORS, GK_COLORS);
+    this.indicators = new IndicatorView(this, shirts);
+    this.penaltyView = new PenaltyView(this, shirts, this.kits.keeperColors);
     this.chargeBar = this.add.graphics().setDepth(DEPTH_UI - 10);
     this.debug = new DebugOverlay(this);
 
@@ -110,10 +191,12 @@ export class MatchScene extends Phaser.Scene {
       .setDepth(DEPTH_UI + 20)
       .setVisible(false);
 
-    // Descarta teclas apertadas antes da cena começar.
+    // Descarta teclas apertadas antes da partida começar.
     keyboard.snapshot();
+    this.ready = true;
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.ready = false;
       this.debug.destroy();
       this.playersView.destroy();
       this.ballView.destroy();
@@ -123,6 +206,13 @@ export class MatchScene extends Phaser.Scene {
   }
 
   override update(): void {
+    if (this.loading) {
+      const r = this.loading.next();
+      if (r.done) this.finishLoading();
+      else this.drawLoading(r.value);
+      return;
+    }
+    if (!this.ready) return;
     // Tempo real do quadro: o `delta` do Phaser é suavizado e fica preso em ~16,7 ms
     // quando o FPS cai, o que deixaria o jogo em câmera lenta em máquinas lentas.
     const frameDt = Math.min(this.game.loop.rawDelta / 1000, MAX_FRAME_DT);
@@ -147,11 +237,13 @@ export class MatchScene extends Phaser.Scene {
 
     const world = this.match.world;
     const alpha = this.paused ? 1 : this.accumulator / SIM_DT;
-    this.playersView.update(world, alpha);
-    this.ballView.update(world.ball, alpha);
+    const now = this.time.now / 1000;
+    const renderDt = this.paused ? 0 : frameDt;
+    this.playersView.update(this.match, alpha, now, renderDt);
+    this.ballView.update(world.ball, alpha, now, renderDt);
     const showIndicators = this.match.phase === 'JOGANDO' || this.match.phase === 'SAIDA_DE_BOLA';
-    this.indicators.update(world, alpha, this.time.now / 1000, showIndicators);
-    this.penaltyView.update(this.match, this.time.now / 1000);
+    this.indicators.update(world, alpha, now, showIndicators);
+    this.penaltyView.update(this.match, now);
     this.drawChargeBars();
     this.drawHud();
     this.drawDebug();
@@ -171,6 +263,7 @@ export class MatchScene extends Phaser.Scene {
   /** Eventos da simulação -> áudio (vazio por enquanto) e efeitos. */
   private consumeEvents(): void {
     for (const e of drainEvents(this.match.world)) {
+      this.playersView.onEvent(e, this.match);
       if (e.type === 'pass') audio.play('passe');
       else if (e.type === 'shot') audio.play('chute');
       else if (e.type === 'contact' && (e.kind === 'post' || e.kind === 'bar')) audio.play('trave');
@@ -181,7 +274,10 @@ export class MatchScene extends Phaser.Scene {
       if (e.type === 'whistle') audio.play('apito');
       else if (e.type === 'finalWhistle' || e.type === 'periodEnd') audio.play('apito-final');
       else if (e.type === 'goal') audio.play('gol');
-      else if (e.type === 'penaltyKick') audio.play('chute');
+      else if (e.type === 'penaltyKick') {
+        audio.play('chute');
+        if (this.match.attempt) this.playersView.onPenaltyKick(this.match.attempt.kicker);
+      }
       else if (e.type === 'penaltyResult' && e.result === 'goal') audio.play('gol');
     }
   }

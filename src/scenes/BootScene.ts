@@ -10,6 +10,11 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Ferramenta de depuração da arte: ?sheet=TIME.
+    if (new URLSearchParams(window.location.search).has('sheet')) {
+      this.scene.start('ArtPreviewScene');
+      return;
+    }
     this.scene.start('MatchScene');
   }
 }

@@ -6,6 +6,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from './config/constants';
 import { FONT_TEXT, FONT_TITLE } from './art/style';
 import { BootScene } from './scenes/BootScene';
 import { MatchScene } from './scenes/MatchScene';
+import { ArtPreviewScene } from './scenes/ArtPreviewScene';
 import { keyboard } from './core/input';
 
 /** Força o download das fontes empacotadas e espera ficarem prontas. */
@@ -48,7 +49,7 @@ async function start(): Promise<void> {
     input: {
       keyboard: false,
     },
-    scene: [BootScene, MatchScene],
+    scene: [BootScene, MatchScene, ArtPreviewScene],
   });
 
   // Ferramenta de inspeção: com ?debug na URL, o jogo fica acessível no console.

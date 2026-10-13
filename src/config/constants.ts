@@ -418,3 +418,36 @@ export const PEN_MIN_HEIGHT = 0.12;
 export const PEN_MAX_HEIGHT = 1.75;
 /** Altura de uma bola isolada (m). */
 export const PEN_OVER_HEIGHT = 2.6;
+
+// ---------------------------------------------------------------------------
+// Uniformes (conflito de cores)
+// ---------------------------------------------------------------------------
+
+/** Pesos da "cor de leitura" (o que aparece de longe): camisa, calção e meias. */
+export const KIT_WEIGHT_SHIRT = 0.6;
+export const KIT_WEIGHT_SHORTS = 0.25;
+export const KIT_WEIGHT_SOCKS = 0.15;
+/** Distância perceptual (CIEDE2000) abaixo da qual dois uniformes conflitam. */
+export const KIT_CONFLICT_THRESHOLD = 22;
+/** Cores possíveis dos goleiros: laranja, verde-limão, cinza, rosa, amarelo, preto. */
+export const KEEPER_COLORS: readonly number[] = [0xff8c1a, 0xa4e22a, 0x8c8c8c, 0xff6fb5, 0xffd60a, 0x1e1e1e];
+
+/** Resolução da arte dos jogadores: px da textura por metro (a tela usa PPM). */
+export const PLAYER_ART_PPM = 46;
+
+// ---------------------------------------------------------------------------
+// Animação dos personagens (quadros por segundo)
+// ---------------------------------------------------------------------------
+
+/** Troca de pose na corrida (na velocidade máxima) e o mínimo ao andar devagar. */
+export const ANIM_RUN_FPS = 14;
+export const ANIM_RUN_MIN_FPS = 9;
+/** Poses de ação (passe, chute, comemoração, lançamento). */
+export const ANIM_ACTION_FPS = 14;
+/** Respiração/balanço das poses paradas. */
+export const ANIM_IDLE_POSE_FPS = 2;
+/** Velocidade (m/s) acima da qual o jogador usa a animação de corrida. */
+export const ANIM_RUN_THRESHOLD = 0.6;
+/** "Achatar ao frear": desaceleração (m/s²) que dispara e duração (s) do achatamento. */
+export const ANIM_BRAKE_DECEL = 30;
+export const ANIM_BRAKE_SQUASH_TIME = 0.12;

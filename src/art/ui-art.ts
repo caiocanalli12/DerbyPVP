@@ -1,7 +1,7 @@
 /**
  * Elementos de interface desenhados por código.
  */
-import Phaser from 'phaser';
+import type Phaser from 'phaser';
 import { BOIL_JITTER, INDICATOR_TRI_HEIGHT, INDICATOR_WIDTH } from '../config/constants';
 import { CREAM_CSS, INK_CSS } from './style';
 import { cssColor, jitterer, makeCanvasTexture } from './canvas';
