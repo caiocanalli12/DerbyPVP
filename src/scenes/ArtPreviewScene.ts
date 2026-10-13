@@ -6,6 +6,8 @@ import { frameName, framesFor, generatePlayerTexture, HAIR_COLORS, HAIR_STYLES, 
 import type { PlayerLook } from '../art/player-art';
 import { chooseKits } from '../sim/kits';
 import { FONT_TEXT } from '../art/style';
+import { crestKey, generateCrestTextures } from '../art/crest-art';
+import { TEAMS } from '../data/teams';
 
 /**
  * Ferramenta de depuração (?sheet=PAL[&vs=COR][&gk=1][&zoom=2]): mostra os quadros gerados
@@ -18,6 +20,10 @@ export class ArtPreviewScene extends Phaser.Scene {
 
   create(): void {
     const q = new URLSearchParams(window.location.search);
+    if (q.get('sheet') === 'crests') {
+      this.showCrests();
+      return;
+    }
     const id = (q.get('sheet') ?? 'PAL').toUpperCase();
     const vs = (q.get('vs') ?? 'COR').toUpperCase();
     const team: TeamId = isTeamId(id) ? id : 'PAL';
@@ -60,6 +66,19 @@ export class ArtPreviewScene extends Phaser.Scene {
       fontFamily: FONT_TEXT,
       fontSize: '14px',
       color: '#ffffff',
+    });
+  }
+
+  /** Os 8 escudos em tamanho grande, sobre fundo claro e escuro. */
+  private showCrests(): void {
+    this.cameras.main.setBackgroundColor('#3a2c22');
+    generateCrestTextures(this);
+    TEAMS.forEach((t, i) => {
+      const x = 160 + (i % 4) * 320;
+      const y = 180 + Math.floor(i / 4) * 330;
+      this.add.rectangle(x, y, 220, 220, i % 2 === 0 ? 0xf3e6c4 : 0x1a1410);
+      this.add.image(x, y, crestKey(t.id)).setScale(1.5);
+      this.add.text(x, y + 140, t.name, { fontFamily: FONT_TEXT, fontSize: '22px', color: '#ffffff' }).setOrigin(0.5);
     });
   }
 }

@@ -12,7 +12,7 @@ import {
 import { isTackleActive, tackleFootTip } from '../sim/tackle';
 import { keyboard } from '../core/input';
 import type { InputFrame } from '../core/input';
-import { DEPTH_UI, PPM, project } from '../core/projection';
+import { DEPTH_UI } from '../core/projection';
 import { audio } from '../audio/AudioManager';
 import { BallView } from '../render/BallView';
 import { DebugOverlay } from '../render/DebugOverlay';
@@ -25,6 +25,9 @@ import type { KitChoice } from '../sim/kits';
 import { getTeam, isTeamId } from '../data/teams';
 import type { TeamId } from '../data/teams';
 import { IndicatorView } from '../render/IndicatorView';
+import { ScoreboardView } from '../render/ScoreboardView';
+import { PowerArcView } from '../render/PowerArcView';
+import { IntertitleView } from '../render/IntertitleView';
 import { CrowdView } from '../render/CrowdView';
 import type { CrowdMood } from '../render/CrowdView';
 import { SponsorView } from '../render/SponsorView';
@@ -36,7 +39,7 @@ import { CROWD_ATTACK_DISTANCE } from '../config/constants';
 import { goalCenter } from '../sim/field';
 import { attackedGoal } from '../sim/world';
 import { Rng } from '../core/rng';
-import { createMatch, drainMatchEvents, formatClock, PENALTY_GOAL, PERIOD_LABEL, stepMatch } from '../sim/match';
+import { createMatch, drainMatchEvents, PENALTY_GOAL, stepMatch } from '../sim/match';
 import type { Match } from '../sim/match';
 import { drainEvents, getPlayer } from '../sim/world';
 import { CREAM_CSS, FONT_TEXT, FONT_TITLE, INK_CSS } from '../art/style';
@@ -69,11 +72,9 @@ export class MatchScene extends Phaser.Scene {
   private crowdView!: CrowdView;
   private sponsorView!: SponsorView;
   private weatherView!: WeatherView;
-  private chargeBar!: Phaser.GameObjects.Graphics;
-  private scoreText!: Phaser.GameObjects.Text;
-  private clockText!: Phaser.GameObjects.Text;
-  private cardBg!: Phaser.GameObjects.Rectangle;
-  private cardText!: Phaser.GameObjects.Text;
+  private scoreboard!: ScoreboardView;
+  private powerArc!: PowerArcView;
+  private intertitle!: IntertitleView;
   private bannerText!: Phaser.GameObjects.Text;
   private pauseText!: Phaser.GameObjects.Text;
   private accumulator = 0;
@@ -167,38 +168,13 @@ export class MatchScene extends Phaser.Scene {
     this.ballView = new BallView(this, weather);
     this.indicators = new IndicatorView(this, shirts);
     this.penaltyView = new PenaltyView(this, shirts, this.kits.keeperColors);
-    this.chargeBar = this.add.graphics().setDepth(DEPTH_UI - 10);
+    this.powerArc = new PowerArcView(this, shirts);
     this.debug = new DebugOverlay(this);
-
-    // Placar simples (o placar de TV vem na fase 12).
+    this.scoreboard = new ScoreboardView(this, this.config.teams, shirts);
+    this.intertitle = new IntertitleView(this);
     const style = { fontFamily: FONT_TEXT, color: CREAM_CSS, stroke: INK_CSS, strokeThickness: 6 };
-    this.scoreText = this.add
-      .text(GAME_WIDTH / 2, 18, '', { ...style, fontSize: '40px', fontStyle: '700' })
-      .setOrigin(0.5, 0)
-      .setDepth(DEPTH_UI);
-    this.clockText = this.add
-      .text(GAME_WIDTH / 2, 68, '', { ...style, fontSize: '24px' })
-      .setOrigin(0.5, 0)
-      .setDepth(DEPTH_UI);
 
-    // Cartão de intertítulo simples (o estilo cinema mudo vem na fase 12).
-    this.cardBg = this.add
-      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x14100c, 0.92)
-      .setDepth(DEPTH_UI + 10)
-      .setVisible(false);
-    this.cardText = this.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2, '', {
-        fontFamily: FONT_TITLE,
-        fontSize: '64px',
-        color: CREAM_CSS,
-        align: 'center',
-        wordWrap: { width: GAME_WIDTH - 160 },
-      })
-      .setOrigin(0.5)
-      .setDepth(DEPTH_UI + 11)
-      .setVisible(false);
-
-    // Faixa de avisos (gol, saída de bola).
+    // "GOOOL!" (a animação elástica completa vem na fase 13).
     this.bannerText = this.add
       .text(GAME_WIDTH / 2, 200, '', { ...style, fontFamily: FONT_TITLE, fontSize: '96px', strokeThickness: 12 })
       .setOrigin(0.5)
@@ -232,6 +208,9 @@ export class MatchScene extends Phaser.Scene {
       this.crowdView.destroy();
       this.sponsorView.destroy();
       this.weatherView.destroy();
+      this.scoreboard.destroy();
+      this.powerArc.destroy();
+      this.intertitle.destroy();
     });
   }
 
@@ -278,7 +257,9 @@ export class MatchScene extends Phaser.Scene {
     const showIndicators = this.match.phase === 'JOGANDO' || this.match.phase === 'SAIDA_DE_BOLA';
     this.indicators.update(world, alpha, now, showIndicators);
     this.penaltyView.update(this.match, now);
-    this.drawChargeBars();
+    this.powerArc.update(this.match, alpha, now);
+    this.scoreboard.update(this.match, now);
+    this.intertitle.update(this.match.intertitle, now);
     this.drawHud();
     this.drawDebug();
   }
@@ -346,42 +327,7 @@ export class MatchScene extends Phaser.Scene {
 
   private drawHud(): void {
     const m = this.match;
-    this.scoreText.setText(`J1  ${m.score[0]}  x  ${m.score[1]}  J2`);
-    this.clockText.setText(m.phase === 'PENALTIS' ? 'PÊN' : `${PERIOD_LABEL[m.period]} ${formatClock(m.clock)}`);
-
-    const showCard = m.intertitle !== null;
-    this.cardBg.setVisible(showCard);
-    this.cardText.setVisible(showCard);
-    if (showCard) {
-      this.cardText.setText(m.intertitle ?? '');
-    }
-
-    if (m.phase === 'COMEMORACAO_GOL') {
-      this.bannerText.setText('GOOOL!').setVisible(true);
-    } else if (m.phase === 'SAIDA_DE_BOLA') {
-      this.bannerText.setText(m.kickoffTeam === 0 ? 'SAÍDA: J1' : 'SAÍDA: J2').setVisible(true);
-    } else {
-      this.bannerText.setVisible(false);
-    }
-  }
-
-  /** Barra de força provisória aos pés de quem carrega (o arco final vem na fase 12). */
-  private drawChargeBars(): void {
-    const g = this.chargeBar;
-    g.clear();
-    const world = this.match.world;
-    for (const team of [0, 1] as const) {
-      const h = world.humans[team];
-      if (!h.charging) continue;
-      const p = getPlayer(world, world.controlled[team]);
-      const pos = project(p.x, p.y + 0.6, 0);
-      const w = 1.4 * PPM * pos.scale;
-      const x0 = pos.x - w / 2;
-      g.fillStyle(0x1a1410, 1);
-      g.fillRect(x0 - 2, pos.y - 2, w + 4, 10);
-      g.fillStyle(h.charge >= 1 && Math.floor(this.time.now / 80) % 2 === 0 ? 0xffffff : 0xffcc33, 1);
-      g.fillRect(x0, pos.y, w * h.charge, 6);
-    }
+    this.bannerText.setText('GOOOL!').setVisible(m.phase === 'COMEMORACAO_GOL');
   }
 
   private drawDebug(): void {

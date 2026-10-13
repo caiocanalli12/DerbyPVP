@@ -4,19 +4,18 @@
  * Fase 9: formas simples; o acabamento art déco vem nas fases 12 e 13.
  */
 import Phaser from 'phaser';
-import { GAME_WIDTH, GOAL_HEIGHT, GOAL_WIDTH, PEN_OVER_START, PEN_SERIES, PEN_TIME_LIMIT } from '../config/constants';
+import { GAME_WIDTH, GOAL_HEIGHT, GOAL_WIDTH, PEN_OVER_START, PEN_TIME_LIMIT } from '../config/constants';
 import { DEPTH_UI } from '../core/projection';
 import { CREAM, CREAM_CSS, FONT_TEXT, FONT_TITLE, INK, INK_CSS } from '../art/style';
 import type { Match } from '../sim/match';
 import { effectiveAim, penaltyHeight } from '../sim/penalties';
-import type { PenaltyResult } from '../sim/penalties';
 
 /** Escala da janela: pixels por metro. */
 const PX = 88;
 const PANEL_W = 470;
 const PANEL_H = 250;
 const PANEL_X = GAME_WIDTH / 2 - PANEL_W / 2;
-const PANEL_Y = 104;
+const PANEL_Y = 118;
 /** Base do gol (linha do chão) e centro na janela. */
 const GOAL_CX = GAME_WIDTH / 2;
 const GOAL_BASE = PANEL_Y + PANEL_H - 22;
@@ -33,7 +32,6 @@ export class PenaltyView {
   private readonly title: Phaser.GameObjects.Text;
   private readonly timer: Phaser.GameObjects.Text;
   private readonly result: Phaser.GameObjects.Text;
-  private readonly series: Phaser.GameObjects.Graphics;
   private readonly mask: Phaser.GameObjects.Graphics;
 
   constructor(
@@ -48,7 +46,6 @@ export class PenaltyView {
     maskShape.fillRoundedRect(PANEL_X, PANEL_Y, PANEL_W, PANEL_H, 14);
     this.mask = maskShape;
     this.g.setMask(maskShape.createGeometryMask());
-    this.series = scene.add.graphics().setDepth(DEPTH_UI + 2);
     const style = { fontFamily: FONT_TEXT, color: CREAM_CSS, stroke: INK_CSS, strokeThickness: 5 };
     this.title = scene.add
       .text(GAME_WIDTH / 2, PANEL_Y + 8, '', { ...style, fontSize: '22px', fontStyle: '700' })
@@ -75,7 +72,6 @@ export class PenaltyView {
     this.title.setVisible(v);
     this.timer.setVisible(v);
     this.result.setVisible(v);
-    this.series.setVisible(v);
   }
 
   update(match: Match, timeSec: number): void {
@@ -86,7 +82,6 @@ export class PenaltyView {
       return;
     }
     this.setVisible(true);
-    this.drawSeries(match);
     const g = this.g;
     g.clear();
     if (!a) {
@@ -229,43 +224,10 @@ export class PenaltyView {
     g.fillCircle(tx + cos * 34 + sin * 6, ty + sin * 34, 11);
   }
 
-  /** Placar da série: uma linha de bolinhas por time no topo. */
-  private drawSeries(match: Match): void {
-    const s = match.shootout;
-    const g = this.series;
-    g.clear();
-    if (!s) return;
-    const n = Math.max(PEN_SERIES, s.kicks[0].length, s.kicks[1].length);
-    const r = 8;
-    const gap = 22;
-    for (const team of [0, 1] as const) {
-      const y = 80;
-      const dir = team === 0 ? -1 : 1;
-      const startX = GAME_WIDTH / 2 + dir * 150;
-      for (let i = 0; i < n; i++) {
-        const x = startX + dir * i * gap;
-        const res: PenaltyResult | undefined = s.kicks[team][i];
-        g.lineStyle(3, INK, 1);
-        g.fillStyle(CREAM, 1);
-        g.fillCircle(x, y, r);
-        g.strokeCircle(x, y, r);
-        if (res === 'goal') {
-          g.fillStyle(this.teamColors[team], 1);
-          g.fillCircle(x, y, r - 2.5);
-        } else if (res) {
-          g.lineStyle(3, 0xc0392b, 1);
-          g.lineBetween(x - 5, y - 5, x + 5, y + 5);
-          g.lineBetween(x - 5, y + 5, x + 5, y - 5);
-        }
-      }
-    }
-  }
-
   destroy(): void {
     this.g.clearMask(true);
     this.mask.destroy();
     this.g.destroy();
-    this.series.destroy();
     this.title.destroy();
     this.timer.destroy();
     this.result.destroy();
