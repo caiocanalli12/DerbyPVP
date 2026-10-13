@@ -118,6 +118,19 @@ describe('passe no mundo', () => {
     expect(w.ball.owner).toBe(r.id);
   });
 
+  it('receptor que corre ao encontro do passe freia e domina (a bola não desvia nele)', () => {
+    const w = worldWithBall();
+    const r = getPlayer(w, playerId(0, 'ALA_D'));
+    r.x = 19;
+    r.y = 10;
+    steps(w, 1, [withButtons(move(1, 0), 'tap'), idle()]);
+    expect(w.controlled[0]).toBe(r.id);
+    // O J1 leva o receptor direto contra a bola, em velocidade máxima.
+    for (let i = 0; i < 120 && w.ball.owner === null; i++) steps(w, 1, [move(-1, 0), idle()]);
+    expect(w.events.some((e) => e.type === 'deflect' && e.player === r.id)).toBe(false);
+    expect(w.ball.owner).toBe(r.id);
+  });
+
   it('sem direcional, passa para onde está virado', () => {
     const w = worldWithBall();
     const r = getPlayer(w, playerId(0, 'ALA_D'));

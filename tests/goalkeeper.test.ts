@@ -152,6 +152,60 @@ describe('bola nas mãos', () => {
     expect(w.ballInHands).toBe(true);
   });
 
+  /** Espera o lançamento (até 1 s + folga). */
+  function waitThrow(w: World): void {
+    for (let i = 0; i < (GK_HOLD_TIME + 0.3) / SIM_DT && w.ball.owner !== null; i++) steps(w, 1);
+    expect(w.ball.owner).toBeNull();
+  }
+
+  it('o lançamento sai por cima de quem está colado no goleiro (não volta para o gol)', () => {
+    const w = caught();
+    const gk = gkOf(w, 1);
+    const free = getPlayer(w, playerId(1, 'ALA_E'));
+    for (const p of w.players) {
+      if (p.team === 1 && p.role !== 'GK') {
+        p.x = 26;
+        p.y = p.id === free.id ? 10 : 2;
+      }
+      if (p.team === 0) {
+        p.x = 8;
+        p.y = 18;
+      }
+    }
+    // Atacante grudado no goleiro, bem no caminho do lançamento.
+    const atk = getPlayer(w, playerId(0, 'ATA'));
+    atk.x = gk.x - 0.85;
+    atk.y = gk.y;
+    w.controlled[0] = atk.id;
+    waitThrow(w);
+    steps(w, Math.round(2.5 / SIM_DT));
+    expect(w.events.some((e) => e.type === 'deflect' && e.player === atk.id)).toBe(false);
+    expect(w.goal).toBeNull();
+  });
+
+  it('o receptor parado domina o lançamento que cai nele (amortece, não rebate no peito)', () => {
+    const w = caught();
+    const free = getPlayer(w, playerId(1, 'ALA_E'));
+    for (const p of w.players) {
+      if (p.team === 1 && p.role !== 'GK') {
+        p.x = 27;
+        p.y = p.id === free.id ? 16 : 3;
+      }
+      if (p.team === 0) {
+        p.x = 8;
+        p.y = 3;
+      }
+    }
+    waitThrow(w);
+    // O alvo é o mais livre no instante do lançamento (a IA se mexe enquanto o goleiro segura).
+    const thrown = w.events.find((e) => e.type === 'pass' && e.player === playerId(1, 'GK'));
+    const target = thrown && thrown.type === 'pass' ? thrown.target : null;
+    expect(target).not.toBeNull();
+    for (let i = 0; i < 3 / SIM_DT && w.ball.owner === null; i++) steps(w, 1);
+    expect(w.events.some((e) => e.type === 'deflect' && e.player === target)).toBe(false);
+    expect(w.ball.owner).toBe(target);
+  });
+
   it('depois de 1 s lança por cima para o companheiro mais livre, e o controle vai para ele', () => {
     const w = caught();
     // Deixa um ala totalmente livre e os outros marcados.

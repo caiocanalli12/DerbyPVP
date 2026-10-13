@@ -166,6 +166,13 @@ export const PASS_MAX_LEAD = 3;
 export const PASS_NO_TARGET_SPEED = 9;
 /** Por quanto tempo (s, além do tempo de voo estimado) o receptor fica "reservado" para o controle. */
 export const PASS_RECEIVER_LOCK_EXTRA = 0.6;
+/**
+ * Domínio do passe: com a bola chegando a menos desta distância (m), o receptor freia para que a
+ * velocidade relativa fique esta folga (m/s) abaixo do limite da posse. Sem isso, quem corre ao
+ * encontro do passe soma a própria velocidade à da bola e ela desvia nele. 0 desliga.
+ */
+export const PASS_RECEIVE_BRAKE_DIST = 2;
+export const PASS_RECEIVE_SPEED_MARGIN = 0.5;
 
 // ---------------------------------------------------------------------------
 // Chute
@@ -375,6 +382,11 @@ export const GK_HANDS_OFFSET = 0.3;
 export const GK_THROW_HSPEED = 8.5;
 export const GK_THROW_MIN_TIME = 0.6;
 export const GK_THROW_MAX_TIME = 1.5;
+/**
+ * A bola sai acima da cabeça (m), mais alta que o corpo de quem estiver colado no goleiro: saindo
+ * da altura das mãos, ela batia nele e voltava para o próprio gol.
+ */
+export const GK_THROW_RELEASE_Z = 2.1;
 /** Escolha do "mais livre": pontos = menor distância a um adversário - distância * peso. */
 export const GK_THROW_DIST_WEIGHT = 0.12;
 /** Goleiro sai para pegar bola solta lenta (m/s) dentro da área se chegar antes. */
@@ -539,3 +551,17 @@ export const FILM_PAPER_ALPHA = 0.5;
 
 /** Duração da tela VS (s). */
 export const VERSUS_DURATION = 2.5;
+
+/**
+ * Tempo (ms) por quadro gasto gerando as texturas da partida (na tela VS e no carregamento): o
+ * maior entre o mínimo e uma fração da duração do quadro (em máquina lenta, cada quadro já é longo
+ * e um orçamento fixo faria a geração demorar demais), sem passar do teto.
+ */
+export const ART_STEP_BUDGET_MS = 8;
+export const ART_STEP_FRAME_SHARE = 0.5;
+export const ART_STEP_MAX_BUDGET_MS = 100;
+/** Quadros de animação de jogador desenhados (e rasterizados) por passo da geração. */
+export const ART_CELLS_PER_STEP = 3;
+
+/** Resolução do fundo de raios dos menus em relação à tela (é ampliado ao desenhar). */
+export const MENU_SUNBURST_RES = 0.6;

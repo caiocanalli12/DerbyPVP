@@ -14,8 +14,8 @@ Jogo de futebol 5x5 para navegador, 2 jogadores locais no mesmo teclado, visual 
 
 ## Stack
 
-- TypeScript `strict`, Phaser **3.80.1** fixo (sem `^`), Vite 6 (`base: './'`), Vitest 3.
-  - Node local é 20.15 → Vite 7 não roda; por isso Vite 6.x / Vitest 3.x.
+- TypeScript `strict`, Phaser **3.80.1** fixo (sem `^`), Vite 6 (`base: './'`), Vitest 4.1 (fixo em `4.1.11`, roda sobre o Vite 6).
+  - Node local é 20.15 → Vite 7 não roda; por isso Vite 6.x.
 - Fontes via `@fontsource`: **Limelight** (títulos, siglas) e **Oswald** (números, textos). Esperar `document.fonts.ready` antes da primeira cena.
 - Resolução lógica 1280x720, `Scale.FIT` + `CENTER_BOTH`, fundo preto, `pixelArt: false`, antialias ligado.
 - Simulação em passo fixo de 1/60 s com acumulador (render interpola entre estados).
@@ -97,7 +97,10 @@ Título → Seleção (J1 esquerda / J2 direita, confirmar/desfazer) → VS (2,5
 1. Base (Vite + TS + Phaser + Vitest + deploy) · 2. Campo e projeção (+ debug com `` ` ``) · 3. Entrada e movimento · 4. Bola (física, posse, passe, chute) · 5. Gol e fluxo da partida · 6. Troca automática + indicador · 7. Dividida · 8. IA de linha e goleiros · 9. Pênaltis · 10. Arte dos jogadores e bola · 11. Estádio, torcida, placas, climas · 12. Interface · 13. Efeitos · 14. Menus · 15. Polimento e deploy final.
 
 ## Decisões técnicas registradas
-- Texturas procedurais são desenhadas com a API Canvas 2D em texturas de canvas do Phaser (`textures.createCanvas`) geradas no carregamento: o `Graphics` do Phaser não tem recorte (clip), gradiente no modo canvas nem texto com fonte, que são necessários para listras de uniforme, céu e placas. Continua 100% desenhado por código, sem imagens externas.
+- Texturas procedurais são desenhadas com a API Canvas 2D (num canvas registrado como textura do Phaser) geradas no carregamento: o `Graphics` do Phaser não tem recorte (clip), gradiente no modo canvas nem texto com fonte, que são necessários para listras de uniforme, céu e placas. Continua 100% desenhado por código, sem imagens externas.
 - Vários quadros de animação vão para um mesmo canvas (atlas) para reduzir trocas de textura.
 - Animações que precisam bater com o relógio real (ex.: tela VS, que gera texturas em paralelo) são calculadas no `update` a partir do tempo real, não com tweens: o delta do Phaser é suavizado/limitado e atrasa em quadros longos.
 - No `SHUTDOWN` da cena o Phaser destrói as câmeras antes dos nossos ouvintes: o `destroy()` das views não pode usar `cameras.main` sem checar se ainda existe.
+- Texturas procedurais (fase 15): cada uma é desenhada num canvas próprio (`art/canvas.ts`) e registrada com `textures.addImage` só no fim, indo para a GPU uma vez só (o `createCanvas` do Phaser enviava o canvas vazio, guardava uma cópia dos pixels e reenviava no `refresh()`). O canvas é de CPU (`willReadFrequently`): medido numa Intel UHD, o canvas acelerado deixava a tela VS mais lenta no total.
+- O Chrome só rasteriza o desenho de um canvas quando alguém lê os pixels. A geração dos jogadores é fatiada (`playerTextureSteps`): alguns quadros do atlas por passo, com a leitura de 1 pixel forçando o raster; todos os jogadores são rasterizados antes e depois enviados à GPU, um por quadro. `advanceArt` avança dentro de um orçamento por quadro que acompanha a duração do quadro (`ART_STEP_*`), para não demorar demais em máquinas lentas.
+- Jogabilidade (fase 15, medida com partidas simuladas com bots): o receptor de um passe freia quando a bola chega (`PASS_RECEIVE_*`), senão quem corria ao encontro do passe somava a própria velocidade à da bola e ela desviava nele (metade dos passes); e amortece a bola que cai sobre ele (ela desce até os pés, onde vale a regra normal de domínio). O lançamento do goleiro sai acima da cabeça (`GK_THROW_RELEASE_Z`): saindo da altura das mãos, batia em quem estivesse colado no goleiro e entrava no próprio gol.

@@ -51,6 +51,7 @@ export class FilmView {
   private readonly dust: Transient[] = [];
   private readonly rng = new Rng(4242);
   private enabled = true;
+  private grainVariant = 0;
 
   constructor(scene: Phaser.Scene, enabled: boolean) {
     generateFilmTextures(scene);
@@ -91,9 +92,13 @@ export class FilmView {
 
   update(timeSec: number, dt: number): void {
     if (!this.enabled) return;
-    this.grain
-      .setTexture(grainKey(Math.floor(timeSec * FILM_GRAIN_FPS) % GRAIN_VARIANTS))
-      .setTilePosition(this.rng.int(0, 255), this.rng.int(0, 255));
+    // Trocar a textura de um TileSprite redesenha e reenvia o padrão para a GPU: só quando muda.
+    const v = Math.floor(timeSec * FILM_GRAIN_FPS) % GRAIN_VARIANTS;
+    if (v !== this.grainVariant) {
+      this.grainVariant = v;
+      this.grain.setTexture(grainKey(v));
+    }
+    this.grain.setTilePosition(this.rng.int(0, 255), this.rng.int(0, 255));
     // Flicker: variação de brilho global quase imperceptível (±3%).
     const f = (Math.sin(timeSec * 41) + Math.sin(timeSec * 23.3) + this.rng.range(-1, 1)) / 3;
     if (f >= 0) this.flicker.setFillStyle(0xfff8e6, f * FILM_FLICKER);

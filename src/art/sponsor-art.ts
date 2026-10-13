@@ -9,6 +9,7 @@ import { Rng } from '../core/rng';
 import { SPONSORS } from '../data/sponsors';
 import type { Sponsor } from '../data/sponsors';
 import { css, inkFill, mix, shade } from './brush';
+import { drawCanvasTexture } from './canvas';
 import type { Ctx } from './canvas';
 import { FONT_TEXT, FONT_TITLE, INK_CSS } from './style';
 
@@ -241,20 +242,17 @@ export function generateSponsorTextures(scene: Phaser.Scene, boardW: number, boa
   const h = Math.round(boardH * SPONSOR_RES);
   SPONSORS.forEach((s, i) => {
     const key = sponsorKey(s.id);
-    if (scene.textures.exists(key)) scene.textures.remove(key);
-    const tex = scene.textures.createCanvas(key, w, h);
-    if (!tex) throw new Error(`Não foi possível criar a placa ${s.id}`);
-    const ctx = tex.getContext();
-    ctx.save();
-    DRAWERS[s.id]?.(ctx, w, h, s);
-    ctx.restore();
-    agePoster(ctx, w, h, 77 + i);
-    const sw = w / SPONSOR_SLATS;
-    for (let k = 0; k < SPONSOR_SLATS; k++) {
-      const x0 = Math.round(k * sw);
-      const x1 = Math.round((k + 1) * sw);
-      tex.add(slatFrame(k), 0, x0, 0, x1 - x0, h);
-    }
-    tex.refresh();
+    drawCanvasTexture(scene, key, w, h, (ctx, addFrame) => {
+      ctx.save();
+      DRAWERS[s.id]?.(ctx, w, h, s);
+      ctx.restore();
+      agePoster(ctx, w, h, 77 + i);
+      const sw = w / SPONSOR_SLATS;
+      for (let k = 0; k < SPONSOR_SLATS; k++) {
+        const x0 = Math.round(k * sw);
+        const x1 = Math.round((k + 1) * sw);
+        addFrame(slatFrame(k), x0, 0, x1 - x0, h);
+      }
+    });
   });
 }

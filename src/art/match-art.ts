@@ -1,14 +1,16 @@
 /**
  * Texturas de uma partida: só os dois times em campo, nos uniformes que vão ser usados.
- * A geração é feita aos poucos (um jogador por vez) para a tela de carregamento andar.
+ * A geração é feita aos poucos (alguns quadros de animação por vez) para a tela não engasgar.
  */
 import type Phaser from 'phaser';
+import { ART_STEP_BUDGET_MS, ART_STEP_FRAME_SHARE, ART_STEP_MAX_BUDGET_MS } from '../config/constants';
 import { Rng } from '../core/rng';
 import type { TeamId } from '../data/teams';
 import type { KitChoice } from '../sim/kits';
 import { ROLE_NUMBER, ROLES } from '../sim/player';
 import { generateBallTextures } from './ball-art';
-import { generatePlayerTexture, HAIR_COLORS, HAIR_STYLES, SKIN_TONES } from './player-art';
+import { HAIR_COLORS, HAIR_STYLES, playerTextureStepCount, playerTextureSteps, SKIN_TONES } from './player-art';
+import { UPLOAD_NEXT } from './canvas';
 import type { PlayerLook } from './player-art';
 import { generateIndicatorTextures } from './ui-art';
 
@@ -51,24 +53,61 @@ export function artSignature(teams: readonly [TeamId, TeamId], kits: KitChoice, 
   return `${teams[0]}:${kits.variants[0]}|${teams[1]}:${kits.variants[1]}|${seed}`;
 }
 
+export interface ArtStep {
+  /** Progresso da geração (0..1). */
+  progress: number;
+  /** O próximo passo envia uma textura grande para a GPU. */
+  uploadNext: boolean;
+}
+
 /**
- * Gera as texturas da partida aos poucos. Cada `next()` faz uma parte e devolve o progresso
- * (0..1). Registra a assinatura no registry do jogo ao terminar.
+ * Gera as texturas da partida aos poucos (alguns quadros de animação de jogador por passo).
+ * Registra a assinatura no registry do jogo ao terminar. Use `advanceArt` para avançar.
  */
 export function* generateMatchArt(
   scene: Phaser.Scene,
   looks: readonly PlayerLook[],
   indicatorColors: readonly [number, number],
   signature: string,
-): Generator<number, void, void> {
+): Generator<ArtStep, void, void> {
+  // As texturas antigas vão sendo trocadas: até terminar, nenhuma partida as considera prontas.
+  scene.registry.set('matchArtSignature', null);
   generateBallTextures(scene);
   for (const c of indicatorColors) generateIndicatorTextures(scene, c);
-  yield 0.05;
-  for (let i = 0; i < looks.length; i++) {
-    generatePlayerTexture(scene, playerTextureKey(i), looks[i]!);
-    yield 0.05 + (0.95 * (i + 1)) / looks.length;
+  const total = looks.reduce((n, look) => n + playerTextureStepCount(look), 0);
+  let done = 0;
+  const step = (uploadNext: boolean): ArtStep => ({ progress: 0.05 + 0.95 * Math.min(1, ++done / total), uploadNext });
+  yield { progress: 0.05, uploadNext: false };
+  // Primeiro desenha todos os jogadores, em fatias pequenas...
+  const players = looks.map((look, i) => playerTextureSteps(scene, playerTextureKey(i), look));
+  for (const gen of players) {
+    for (let r = gen.next(); !r.done && r.value !== UPLOAD_NEXT; r = gen.next()) yield step(false);
+  }
+  // ...depois envia cada atlas para a GPU, um por passo (cada envio leva alguns ms).
+  for (const gen of players) {
+    yield step(true);
+    gen.next();
   }
   scene.registry.set('matchArtSignature', signature);
+}
+
+/** Orçamento (ms) de geração para um quadro que durou `frameMs`. */
+export function artBudgetMs(frameMs: number): number {
+  return Math.min(ART_STEP_MAX_BUDGET_MS, Math.max(ART_STEP_BUDGET_MS, frameMs * ART_STEP_FRAME_SHARE));
+}
+
+/**
+ * Avança a geração por até `budgetMs` neste quadro, para a animação da tela não engasgar. O envio
+ * de uma textura para a GPU sempre começa num quadro novo. Devolve o último passo, ou null quando
+ * terminou.
+ */
+export function advanceArt(gen: Generator<ArtStep, void, void>, budgetMs: number): ArtStep | null {
+  const start = performance.now();
+  for (;;) {
+    const r = gen.next();
+    if (r.done) return null;
+    if (r.value.uploadNext || performance.now() - start >= budgetMs) return r.value;
+  }
 }
 
 export function matchArtReady(scene: Phaser.Scene, signature: string): boolean {

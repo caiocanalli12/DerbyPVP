@@ -4,7 +4,7 @@
  * com grão e flicker.
  */
 import Phaser from 'phaser';
-import { GAME_HEIGHT, GAME_WIDTH } from '../config/constants';
+import { FILM_GRAIN_FPS, GAME_HEIGHT, GAME_WIDTH } from '../config/constants';
 import { DEPTH_UI } from '../core/projection';
 import { DECO_FRAME_KEY, generateDecoFrame } from '../art/ui-art';
 import { generateFilmTextures, GRAIN_VARIANTS, grainKey } from '../art/film-fx';
@@ -17,6 +17,7 @@ export class IntertitleView {
   private readonly grain: Phaser.GameObjects.TileSprite;
   private shownText: string | null = null;
   private shownAt = 0;
+  private grainVariant = 0;
 
   constructor(scene: Phaser.Scene, depth = DEPTH_UI + 10) {
     generateDecoFrame(scene, GAME_WIDTH, GAME_HEIGHT);
@@ -68,9 +69,13 @@ export class IntertitleView {
     this.bg.setAlpha(0.97 * fade);
     this.frame.setAlpha(fade * flicker);
     this.text.setAlpha(fade * flicker).setScale(1 + (1 - fade) * 0.06);
-    this.grain
-      .setTexture(grainKey(Math.floor(timeSec * 24) % GRAIN_VARIANTS))
-      .setTilePosition(Math.floor(timeSec * 997) % 256, Math.floor(timeSec * 613) % 256);
+    // Trocar a textura de um TileSprite reenvia o padrão para a GPU: só quando muda.
+    const v = Math.floor(timeSec * FILM_GRAIN_FPS) % GRAIN_VARIANTS;
+    if (v !== this.grainVariant) {
+      this.grainVariant = v;
+      this.grain.setTexture(grainKey(v));
+    }
+    this.grain.setTilePosition(Math.floor(timeSec * 997) % 256, Math.floor(timeSec * 613) % 256);
   }
 
   destroy(): void {

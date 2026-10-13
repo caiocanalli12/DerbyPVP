@@ -6,7 +6,8 @@ import { getTeam } from '../data/teams';
 import type { TeamId } from '../data/teams';
 import { getWeather, randomWeather } from '../data/weather';
 import type { WeatherId } from '../data/weather';
-import { artSignature, buildLooks, generateMatchArt, matchArtReady } from '../art/match-art';
+import { advanceArt, artBudgetMs, artSignature, buildLooks, generateMatchArt, matchArtReady } from '../art/match-art';
+import type { ArtStep } from '../art/match-art';
 import { crestKey, generateCrestTextures } from '../art/crest-art';
 import { cloudKey, generateWeatherTextures, moonKey, sunKey } from '../art/weather-art';
 import { CREAM, CREAM_CSS, FONT_TEXT, FONT_TITLE, INK, INK_CSS } from '../art/style';
@@ -43,7 +44,9 @@ const POSTER_DROP = 8;
  */
 export class VersusScene extends Phaser.Scene {
   private config!: MatchConfig;
-  private gen: Generator<number, void, void> | null = null;
+  private gen: Generator<ArtStep, void, void> | null = null;
+  /** O próximo passo da geração é um envio para a GPU. */
+  private uploadPending = false;
   private rays!: Phaser.GameObjects.Image;
   private film!: FilmView;
   private crests!: [Phaser.GameObjects.Image, Phaser.GameObjects.Image];
@@ -68,6 +71,7 @@ export class VersusScene extends Phaser.Scene {
 
   create(): void {
     this.leaving = false;
+    this.uploadPending = false;
     this.clashed = false;
     // O relógio começa no primeiro quadro: se a criação demorar, a entrada não é pulada.
     this.started = -1;
@@ -111,6 +115,7 @@ export class VersusScene extends Phaser.Scene {
     // Texturas da partida (só os dois times, nos uniformes que vão ser usados).
     const kits = chooseKits(t1, t2);
     const signature = artSignature(this.config.teams, kits, this.config.seed);
+    this.gen = null;
     if (!matchArtReady(this, signature)) {
       const looks = buildLooks(this.config.teams, kits, this.config.seed);
       this.gen = generateMatchArt(this, looks, [kits.kits[0].shirt, kits.kits[1].shirt], signature);
@@ -145,8 +150,14 @@ export class VersusScene extends Phaser.Scene {
     const t = now - this.started;
     this.rays.setRotation(t * 0.1);
     this.film.update(now, Math.min(0.25, this.game.loop.rawDelta / 1000));
-    // Uma parte das texturas por quadro (a barra de progresso é a própria tela VS).
-    if (this.gen && this.gen.next().done) this.gen = null;
+    // Um pouco das texturas por quadro, dentro de um orçamento de tempo (a barra de progresso é a
+    // própria tela VS). Os envios para a GPU (um por quadro) ficam para depois do choque e do
+    // recuo: a entrada dos escudos fica lisa.
+    if (this.gen && (!this.uploadPending || t >= CLASH_AT + 2 * RECOIL_TIME)) {
+      const step = advanceArt(this.gen, artBudgetMs(this.game.loop.rawDelta));
+      if (step === null) this.gen = null;
+      else this.uploadPending = step.uploadNext;
+    }
 
     this.animate(t);
     if (!this.clashed && t >= CLASH_AT) {

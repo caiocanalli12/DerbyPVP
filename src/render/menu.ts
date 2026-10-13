@@ -3,7 +3,7 @@
  * art déco com a linha fervendo e a leitura de teclado dos dois jogadores.
  */
 import Phaser from 'phaser';
-import { BOIL_FPS, BOIL_JITTER, GAME_HEIGHT, GAME_WIDTH } from '../config/constants';
+import { BOIL_FPS, BOIL_JITTER, GAME_HEIGHT, GAME_WIDTH, MENU_SUNBURST_RES } from '../config/constants';
 import { keyboard } from '../core/input';
 import type { InputFrame } from '../core/input';
 import { Rng } from '../core/rng';
@@ -57,11 +57,17 @@ export function readMenuInput(): MenuInput {
 
 export const SUNBURST_KEY = 'menu-sunburst';
 
-/** Fundo de raios girando (cores alternadas) + escurecimento nas bordas. */
+/**
+ * Fundo de raios girando (cores alternadas) + escurecimento nas bordas.
+ *
+ * Girando, qualquer ponto até meia diagonal da tela aparece, então a textura cobre esse círculo.
+ * Ela é desenhada em resolução menor e ampliada (raios grandes e lisos não perdem nada visível).
+ */
 export function addSunburst(scene: Phaser.Scene, a = 0xe8b04b, b = 0xd3913a): Phaser.GameObjects.Image {
   const key = `${SUNBURST_KEY}-${a.toString(16)}-${b.toString(16)}`;
+  const k = MENU_SUNBURST_RES;
   if (!scene.textures.exists(key)) {
-    const S = 1700;
+    const S = Math.ceil(Math.hypot(GAME_WIDTH, GAME_HEIGHT) * k) + 4;
     makeCanvasTexture(scene, key, S, S, (ctx) => {
       const c = S / 2;
       const n = 28;
@@ -75,7 +81,8 @@ export function addSunburst(scene: Phaser.Scene, a = 0xe8b04b, b = 0xd3913a): Ph
         ctx.fillStyle = css(i % 2 === 0 ? a : b);
         ctx.fill();
       }
-      const g = ctx.createRadialGradient(c, c, 60, c, c, S * 0.5);
+      // Raios do brilho e do escurecimento medidos na tela (60 e 850 px), não na textura.
+      const g = ctx.createRadialGradient(c, c, 60 * k, c, c, 850 * k);
       g.addColorStop(0, 'rgba(255,240,200,0.45)');
       g.addColorStop(0.5, 'rgba(0,0,0,0)');
       g.addColorStop(1, 'rgba(40,20,10,0.55)');
@@ -83,7 +90,10 @@ export function addSunburst(scene: Phaser.Scene, a = 0xe8b04b, b = 0xd3913a): Ph
       ctx.fillRect(0, 0, S, S);
     });
   }
-  return scene.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, key).setDepth(-10);
+  return scene.add
+    .image(GAME_WIDTH / 2, GAME_HEIGHT / 2, key)
+    .setScale(1 / k)
+    .setDepth(-10);
 }
 
 // ---------------------------------------------------------------------------

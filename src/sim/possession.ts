@@ -10,6 +10,8 @@ import {
   DRIBBLE_TOUCH_AMPLITUDE,
   FIELD_LENGTH,
   FIELD_WIDTH,
+  PASS_RECEIVE_BRAKE_DIST,
+  PASS_RECEIVE_SPEED_MARGIN,
   PLAYER_HEIGHT,
   PLAYER_RADIUS,
   PLAYER_RUN_SPEED,
@@ -34,6 +36,20 @@ export function canGainPossession(p: Player): boolean {
 /** Velocidade (horizontal) da bola relativa ao jogador. A altura já é limitada por POSSESSION_MAX_Z. */
 export function relativeSpeed(ball: Ball, p: Player): number {
   return Math.hypot(ball.vx - p.vx, ball.vy - p.vy);
+}
+
+/**
+ * Velocidade máxima do receptor de um passe com a bola chegando perto: a soma das velocidades
+ * (o pior caso, de frente) fica abaixo do limite da posse. Infinity se a bola está longe ou se
+ * afastando.
+ */
+export function receiveSpeedCap(ball: Ball, p: Player): number {
+  const dx = ball.x - p.x;
+  const dy = ball.y - p.y;
+  if (Math.hypot(dx, dy) > PASS_RECEIVE_BRAKE_DIST) return Infinity;
+  const closing = dx * (ball.vx - p.vx) + dy * (ball.vy - p.vy) < 0;
+  if (!closing) return Infinity;
+  return Math.max(0, POSSESSION_MAX_REL_SPEED - PASS_RECEIVE_SPEED_MARGIN - Math.hypot(ball.vx, ball.vy));
 }
 
 /** Altura do corpo para a bola: deslizando ou caído, a bola passa por cima mais fácil. */

@@ -8,6 +8,7 @@ import { BOIL_JITTER } from '../config/constants';
 import { Rng } from '../core/rng';
 import type { Kit } from '../data/teams';
 import { css, ellipsePath, inkFill, light, mix, pieEye, shade } from './brush';
+import { makeCanvasTexture } from './canvas';
 import type { Ctx } from './canvas';
 import { INK_CSS } from './style';
 
@@ -202,32 +203,27 @@ export function generateCrowdTexture(scene: Phaser.Scene, kits: readonly [Kit, K
   const fanRows = 2 * FAN_BOILS;
   const width = Math.max(cols * FAN_W, 2 * FLAG_FRAMES * FLAG_W);
   const height = fanRows * FAN_H + FLAG_H;
-  if (scene.textures.exists(CROWD_KEY)) scene.textures.remove(CROWD_KEY);
-  const tex = scene.textures.createCanvas(CROWD_KEY, width, height);
-  if (!tex) throw new Error('Não foi possível criar a textura da torcida');
-  const ctx = tex.getContext();
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
-  for (const team of [0, 1] as const) {
-    const { main, second } = crowdColors(kits[team]);
-    for (let b = 0; b < FAN_BOILS; b++) {
-      for (let v = 0; v < FAN_VARIANTS; v++) {
-        for (let p = 0; p < FAN_POSES; p++) {
-          const x = (v * FAN_POSES + p) * FAN_W;
-          const y = (team * FAN_BOILS + b) * FAN_H;
-          // Variação de tom da camisa entre torcedores.
-          const shirt = v % 3 === 0 ? light(main, 0.12) : v % 3 === 1 ? main : shade(main, 0.12);
-          drawFan(ctx, x, y, shirt, second, v, p, b);
-          tex.add(fanFrame(team, v, p, b), 0, x, y, FAN_W, FAN_H);
+  makeCanvasTexture(scene, CROWD_KEY, width, height, (ctx, addFrame) => {
+    for (const team of [0, 1] as const) {
+      const { main, second } = crowdColors(kits[team]);
+      for (let b = 0; b < FAN_BOILS; b++) {
+        for (let v = 0; v < FAN_VARIANTS; v++) {
+          for (let p = 0; p < FAN_POSES; p++) {
+            const x = (v * FAN_POSES + p) * FAN_W;
+            const y = (team * FAN_BOILS + b) * FAN_H;
+            // Variação de tom da camisa entre torcedores.
+            const shirt = v % 3 === 0 ? light(main, 0.12) : v % 3 === 1 ? main : shade(main, 0.12);
+            drawFan(ctx, x, y, shirt, second, v, p, b);
+            addFrame(fanFrame(team, v, p, b), x, y, FAN_W, FAN_H);
+          }
         }
       }
+      for (let f = 0; f < FLAG_FRAMES; f++) {
+        const x = (team * FLAG_FRAMES + f) * FLAG_W;
+        const y = fanRows * FAN_H;
+        drawFlag(ctx, x, y, main, second, f);
+        addFrame(flagFrame(team, f), x, y, FLAG_W, FLAG_H);
+      }
     }
-    for (let f = 0; f < FLAG_FRAMES; f++) {
-      const x = (team * FLAG_FRAMES + f) * FLAG_W;
-      const y = fanRows * FAN_H;
-      drawFlag(ctx, x, y, main, second, f);
-      tex.add(flagFrame(team, f), 0, x, y, FLAG_W, FLAG_H);
-    }
-  }
-  tex.refresh();
+  });
 }

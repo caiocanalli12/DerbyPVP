@@ -14,9 +14,11 @@
  * entre os pés.
  */
 import type Phaser from 'phaser';
-import { BOIL_JITTER, PLAYER_ART_PPM } from '../config/constants';
+import { ART_CELLS_PER_STEP, BOIL_JITTER, PLAYER_ART_PPM } from '../config/constants';
 import { Rng } from '../core/rng';
 import type { Kit } from '../data/teams';
+import { drawCanvasTextureSteps } from './canvas';
+import type { UPLOAD_NEXT } from './canvas';
 import type { Ctx } from './canvas';
 import { css, ellipsePath, hose, inkFill, mix, pieEye, quadEndDir, shade } from './brush';
 import type { P } from './brush';
@@ -1120,6 +1122,20 @@ const COLS_WIDE = 7;
  * Recria a textura se já existir (nova partida, novos uniformes).
  */
 export function generatePlayerTexture(scene: Phaser.Scene, key: string, look: PlayerLook): void {
+  for (const step of playerTextureSteps(scene, key, look)) void step;
+}
+
+/** Quantos passos `playerTextureSteps` leva (um por grupo de quadros do atlas, mais o envio). */
+export function playerTextureStepCount(look: PlayerLook): number {
+  return Math.ceil(framesFor(look.isKeeper).length / ART_CELLS_PER_STEP) + 1;
+}
+
+/** Igual a `generatePlayerTexture`, desenhando alguns quadros do atlas por passo. */
+export function playerTextureSteps(
+  scene: Phaser.Scene,
+  key: string,
+  look: PlayerLook,
+): Generator<typeof UPLOAD_NEXT | void, unknown, void> {
   const frames = framesFor(look.isKeeper);
   const tall = frames.filter((f) => !f.wide);
   const wide = frames.filter((f) => f.wide);
@@ -1127,30 +1143,31 @@ export function generatePlayerTexture(scene: Phaser.Scene, key: string, look: Pl
   const rowsWide = Math.ceil(wide.length / COLS_WIDE);
   const width = Math.max(COLS_TALL * TALL.w, COLS_WIDE * WIDE.w);
   const height = rowsTall * TALL.h + rowsWide * WIDE.h;
-  if (scene.textures.exists(key)) scene.textures.remove(key);
-  const tex = scene.textures.createCanvas(key, width, height);
-  if (!tex) throw new Error(`Não foi possível criar a textura ${key}`);
-  const ctx = tex.getContext();
-  ctx.clearRect(0, 0, width, height);
-
-  const place = (list: FrameRef[], cols: number, size: { w: number; h: number; ox: number; oy: number }, y0: number): void => {
-    list.forEach((fr, i) => {
-      const x = (i % cols) * size.w;
-      const y = y0 + Math.floor(i / cols) * size.h;
-      const p = poseFor(fr.anim, fr.view, fr.frame);
-      const seed = look.seed * 7919 + i * 131 + fr.variant * 977 + (fr.wide ? 50000 : 0);
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(x, y, size.w, size.h);
-      ctx.clip();
-      drawFigure(ctx, look, p, fr.view, x + size.ox, y + size.oy, seed);
-      ctx.restore();
-      tex.add(frameName(fr.anim, fr.view, fr.frame, fr.variant), 0, x, y, size.w, size.h);
-    });
-  };
-  place(tall, COLS_TALL, TALL, 0);
-  place(wide, COLS_WIDE, WIDE, rowsTall * TALL.h);
-  tex.refresh();
+  return drawCanvasTextureSteps(scene, key, width, height, function* (ctx, addFrame) {
+    const cells: [FrameRef[], number, { w: number; h: number; ox: number; oy: number }, number][] = [
+      [tall, COLS_TALL, TALL, 0],
+      [wide, COLS_WIDE, WIDE, rowsTall * TALL.h],
+    ];
+    let drawn = 0;
+    for (const [list, cols, size, y0] of cells) {
+      for (let i = 0; i < list.length; i++) {
+        const fr = list[i]!;
+        const x = (i % cols) * size.w;
+        const y = y0 + Math.floor(i / cols) * size.h;
+        const p = poseFor(fr.anim, fr.view, fr.frame);
+        const seed = look.seed * 7919 + i * 131 + fr.variant * 977 + (fr.wide ? 50000 : 0);
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x, y, size.w, size.h);
+        ctx.clip();
+        drawFigure(ctx, look, p, fr.view, x + size.ox, y + size.oy, seed);
+        ctx.restore();
+        addFrame(frameName(fr.anim, fr.view, fr.frame, fr.variant), x, y, size.w, size.h);
+        if (++drawn % ART_CELLS_PER_STEP === 0) yield;
+      }
+    }
+    if (drawn % ART_CELLS_PER_STEP !== 0) yield;
+  });
 }
 
 /** Origem (0..1) de cada tipo de quadro: o ponto do chão entre os pés. */

@@ -53,6 +53,7 @@ import {
   GK_THROW_HSPEED,
   GK_THROW_MAX_TIME,
   GK_THROW_MIN_TIME,
+  GK_THROW_RELEASE_Z,
   GOAL_AREA_RADIUS,
   GOAL_HEIGHT,
   GRAVITY,
@@ -282,9 +283,13 @@ export function chooseThrowTarget(world: World, gk: Player): Player | null {
   return best;
 }
 
-/** Lança a bola por cima para `target`, aterrissando nele (com antecipação se estiver correndo). */
+/**
+ * Lança a bola por cima para `target`, aterrissando nele (com antecipação se estiver correndo).
+ * Ela sai acima da cabeça, para não bater em quem estiver colado no goleiro.
+ */
 function throwBall(world: World, gk: Player, target: Player, onControl: (team: TeamIndex, id: number) => void): void {
   const ball = world.ball;
+  ball.z = GK_THROW_RELEASE_Z;
   let tx = target.x;
   let ty = target.y;
   let T = clamp(Math.hypot(tx - ball.x, ty - ball.y) / GK_THROW_HSPEED, GK_THROW_MIN_TIME, GK_THROW_MAX_TIME);

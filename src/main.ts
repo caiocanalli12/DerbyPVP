@@ -13,6 +13,7 @@ import { VersusScene } from './scenes/VersusScene';
 import { PauseScene } from './scenes/PauseScene';
 import { ResultScene } from './scenes/ResultScene';
 import { keyboard } from './core/input';
+import { setBallFavicon } from './art/ball-art';
 
 /** Força o download das fontes empacotadas e espera ficarem prontas. */
 async function loadFonts(): Promise<void> {
@@ -29,6 +30,7 @@ async function loadFonts(): Promise<void> {
 }
 
 async function start(): Promise<void> {
+  setBallFavicon();
   await loadFonts();
   document.getElementById('loading')?.remove();
 

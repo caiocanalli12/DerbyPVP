@@ -6,6 +6,7 @@ import {
   DEFLECT_NO_TOUCH,
   PLAYER_DRIBBLE_SPEED_FACTOR,
   PLAYER_RUN_SPEED,
+  POSSESSION_MAX_Z,
 } from '../config/constants';
 import type { PlayerInput } from '../core/input';
 import { Rng } from '../core/rng';
@@ -27,7 +28,7 @@ import type { GoalSide } from './field';
 import { separatePlayers } from './physics';
 import { clampToField, createPlayer, formationPosition, integrateMovement, ROLES } from './player';
 import type { Player, Role, TeamIndex } from './player';
-import { bodyHeight, deflectOffPlayers, findPossessionWinner, placeDribbledBall } from './possession';
+import { bodyHeight, deflectOffPlayers, findPossessionWinner, placeDribbledBall, receiveSpeedCap } from './possession';
 import { chooseMarker, faceBallWhenIdle, isAiFieldPlayer, updateFieldAi } from './ai';
 import {
   clampKeeperToArea,
@@ -235,8 +236,15 @@ function stepBall(world: World, dt: number): void {
     }
     if (ball.owner !== null) return;
     if (saved) continue;
+    // O receptor de um passe amortece a bola que cai sobre ele em vez de rebatê-la com o corpo: ela
+    // desce até os pés, onde vale a regra normal de domínio (altura e velocidade relativa).
+    const receiver = world.passLock ? world.passLock.receiver : -1;
     const hit = deflectOffPlayers(ball, world.players, (p) =>
-      p.role === 'GK' ? keeperBodyHeight(world.keepers[p.team], bodyHeight(p)) : bodyHeight(p),
+      p.role === 'GK'
+        ? keeperBodyHeight(world.keepers[p.team], bodyHeight(p))
+        : p.id === receiver
+          ? Math.min(bodyHeight(p), POSSESSION_MAX_Z)
+          : bodyHeight(p),
     );
     if (hit) {
       ball.lastTouch = hit.id;
@@ -299,6 +307,11 @@ export function stepWorld(world: World, inputs: HumanInputs, dt: number): void {
 
   if (world.ball.owner !== null && !world.ballInHands) {
     getPlayer(world, world.ball.owner).maxSpeed *= PLAYER_DRIBBLE_SPEED_FACTOR;
+  }
+  // Domínio do passe: o receptor freia quando a bola chega, para não deixá-la desviar nele.
+  if (world.passLock && world.ball.owner === null) {
+    const r = getPlayer(world, world.passLock.receiver);
+    r.maxSpeed = Math.min(r.maxSpeed, receiveSpeedCap(world.ball, r));
   }
 
   for (const p of world.players) {

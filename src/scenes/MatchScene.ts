@@ -18,7 +18,8 @@ import { DebugOverlay } from '../render/DebugOverlay';
 import { FieldView } from '../render/FieldView';
 import { PlayersView } from '../render/PlayersView';
 import { PenaltyView } from '../render/PenaltyView';
-import { artSignature, buildLooks, generateMatchArt, matchArtReady } from '../art/match-art';
+import { advanceArt, artBudgetMs, artSignature, buildLooks, generateMatchArt, matchArtReady } from '../art/match-art';
+import type { ArtStep } from '../art/match-art';
 import { chooseKits } from '../sim/kits';
 import type { KitChoice } from '../sim/kits';
 import { getTeam, isTeamId } from '../data/teams';
@@ -62,7 +63,7 @@ export interface MatchConfig {
 export class MatchScene extends Phaser.Scene {
   private config!: MatchConfig;
   private kits!: KitChoice;
-  private loading: Generator<number, void, void> | null = null;
+  private loading: Generator<ArtStep, void, void> | null = null;
   private loadingGfx: Phaser.GameObjects.Graphics | null = null;
   private loadingText: Phaser.GameObjects.Text | null = null;
   private ready = false;
@@ -215,9 +216,9 @@ export class MatchScene extends Phaser.Scene {
 
   override update(): void {
     if (this.loading) {
-      const r = this.loading.next();
-      if (r.done) this.finishLoading();
-      else this.drawLoading(r.value);
+      const step = advanceArt(this.loading, artBudgetMs(this.game.loop.rawDelta));
+      if (step === null) this.finishLoading();
+      else this.drawLoading(step.progress);
       return;
     }
     if (!this.ready) return;
