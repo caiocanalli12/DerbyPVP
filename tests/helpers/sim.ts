@@ -47,11 +47,17 @@ export function seconds(world: World, s: number, inputs: HumanInputs = [idle(), 
   steps(world, Math.round(s / SIM_DT), inputs);
 }
 
-/** Tira todos os jogadores do caminho (cantos do campo). */
+/** Tira todos os jogadores do caminho (cantos do campo; goleiros no canto da própria área). */
 export function clearPlayers(world: World): void {
   world.players.forEach((p, i) => {
-    p.x = 1 + (i % 5) * 0.9;
-    p.y = i < 5 ? 0.5 : 19.5;
+    if (p.role === 'GK') {
+      const left = world.defends[p.team] === 0;
+      p.x = left ? 0.5 : 39.5;
+      p.y = left ? 4.6 : 15.4;
+    } else {
+      p.x = 1 + (i % 5) * 0.9;
+      p.y = i < 5 ? 0.5 : 19.5;
+    }
     p.prevX = p.x;
     p.prevY = p.y;
     p.vx = 0;

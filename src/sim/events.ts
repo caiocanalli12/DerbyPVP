@@ -13,4 +13,5 @@ export type SimEvent =
   | { type: 'goal'; side: GoalSide; lastTouch: number | null }
   | { type: 'tackleStart'; player: number }
   | { type: 'tackle'; player: number; result: 'steal' | 'loose'; victim: number | null }
-  | { type: 'tackleMiss'; player: number };
+  | { type: 'tackleMiss'; player: number }
+  | { type: 'save'; player: number; result: 'catch' | 'parry' };

@@ -31,9 +31,14 @@ export function canGainPossession(p: Player): boolean {
   return p.role !== 'GK' && canTouchBall(p);
 }
 
-/** Velocidade da bola relativa ao jogador. */
+/** Velocidade (horizontal) da bola relativa ao jogador. A altura já é limitada por POSSESSION_MAX_Z. */
 export function relativeSpeed(ball: Ball, p: Player): number {
-  return Math.hypot(ball.vx - p.vx, ball.vy - p.vy, ball.vz);
+  return Math.hypot(ball.vx - p.vx, ball.vy - p.vy);
+}
+
+/** Altura do corpo para a bola: deslizando ou caído, a bola passa por cima mais fácil. */
+export function bodyHeight(p: Player): number {
+  return p.state === 'tackling' || p.state === 'fallen' ? 0.6 : PLAYER_HEIGHT;
 }
 
 /** A bola está baixa e lenta o bastante (em relação a ele) para este jogador dominar? */
@@ -67,12 +72,17 @@ export function findPossessionWinner(ball: Ball, players: readonly Player[]): Pl
  * Bola rápida demais (ou de quem não pode dominar) bate no corpo e desvia.
  * Devolve o jogador em que bateu, ou null.
  */
-export function deflectOffPlayers(ball: Ball, players: readonly Player[]): Player | null {
+export function deflectOffPlayers(
+  ball: Ball,
+  players: readonly Player[],
+  heightOf: (p: Player) => number = bodyHeight,
+): Player | null {
   if (ball.owner !== null || ball.z > PLAYER_HEIGHT) return null;
   const minD = PLAYER_RADIUS + BALL_RADIUS;
   let hit: Player | null = null;
   for (const p of players) {
     if (!canTouchBall(p)) continue;
+    if (ball.z > heightOf(p)) continue;
     // Quem consegue dominar não desvia: fica com a bola na checagem de posse.
     if (canDominate(ball, p)) continue;
     const dx = ball.x - p.x;

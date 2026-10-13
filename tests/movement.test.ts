@@ -86,6 +86,8 @@ describe('movimento', () => {
 
   it('os dois humanos movem seus jogadores ao mesmo tempo', () => {
     const w = createWorld();
+    // Sem IA, para provar que só os controlados se mexem.
+    w.aiEnabled = false;
     const p1 = getPlayer(w, w.controlled[0]);
     const p2 = getPlayer(w, w.controlled[1]);
     const p1x = p1.x;
@@ -93,7 +95,7 @@ describe('movimento', () => {
     run(w, [input(1, 0), input(0, -1)], 0.5);
     expect(p1.x).toBeGreaterThan(p1x + 2);
     expect(p2.y).toBeLessThan(p2y - 2);
-    // Os demais ficam parados (IA entra na fase 8).
+    // Os demais ficam parados (IA desligada neste teste).
     for (const p of w.players) {
       if (p.id === p1.id || p.id === p2.id) continue;
       expect(Math.hypot(p.vx, p.vy)).toBe(0);

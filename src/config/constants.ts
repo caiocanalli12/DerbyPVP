@@ -188,7 +188,7 @@ export const SHOT_MAX_VZ = 5.5;
 /** A partir desta carga entra a imprecisão aleatória. */
 export const SHOT_INACCURACY_START = 0.85;
 /** Erro angular horizontal máximo (graus) com 100% de carga. */
-export const SHOT_MAX_ERROR_DEG = 10;
+export const SHOT_MAX_ERROR_DEG = 7;
 /** Erro vertical máximo (m/s em vz) com 100% de carga. */
 export const SHOT_MAX_EXTRA_VZ = 4.5;
 /** Velocidade a partir da qual o chute é "forte" (rastro visual, etc.). */
@@ -269,3 +269,114 @@ export const TACKLE_STUMBLE_TIME = 0.5;
 export const TACKLE_FALLEN_TIME = 0.8;
 /** Recarga entre divididas (s, a partir do início). */
 export const TACKLE_COOLDOWN = 1.2;
+
+// ---------------------------------------------------------------------------
+// IA dos jogadores de linha
+// (coordenadas "de ataque": u = distância a partir do próprio gol, v = lateral com
+//  o ala esquerdo em v pequeno, igual à tabela de formação)
+// ---------------------------------------------------------------------------
+
+/** Fração do deslocamento da bola (em relação ao centro) que a formação acompanha. */
+export const AI_BALL_FOLLOW_U = 0.3;
+export const AI_BALL_FOLLOW_V = 0.2;
+/** Zonas de cada função (limites em u e v). */
+export const AI_ZONES = {
+  FIXO: { uMin: 2.5, uMax: 22, vMin: 4, vMax: 16 },
+  ALA_E: { uMin: 5, uMax: 35, vMin: 1.2, vMax: 9.5 },
+  ALA_D: { uMin: 5, uMax: 35, vMin: 10.5, vMax: 18.8 },
+  ATA: { uMin: 13, uMax: 37.5, vMin: 3, vMax: 17 },
+} as const;
+/** Deslocamento extra para as posições de ataque quando o time tem a bola (m). */
+export const AI_ATTACK_SHIFT = {
+  FIXO: { du: 4, dv: 0 },
+  ALA_E: { du: 8, dv: -2 },
+  ALA_D: { du: 8, dv: 2 },
+  ATA: { du: 6, dv: 0 },
+} as const;
+/** Quando o adversário tem a bola: recuo (m) e quanto os demais fecham o meio (0..1). */
+export const AI_DEFENSE_DROP = 3;
+export const AI_DEFENSE_SQUEEZE = 0.4;
+/** Distância (m) do marcador ao portador, entre ele e o próprio gol. */
+export const AI_MARK_DISTANCE = 2;
+/** Velocidade com que o alvo da IA se move (1/s; suaviza mudanças de posição). */
+export const AI_TARGET_SMOOTHING = 4;
+/** Raio de chegada (m): perto do alvo a IA desacelera; abaixo da zona morta, para. */
+export const AI_ARRIVE_RADIUS = 1.5;
+export const AI_DEAD_ZONE = 0.15;
+/** Fração da velocidade de corrida usada pela IA ao se reposicionar. */
+export const AI_SPEED_FACTOR = 0.9;
+
+// ---------------------------------------------------------------------------
+// Goleiro (IA)
+// ---------------------------------------------------------------------------
+
+/** Distância da linha do gol em que o goleiro fica (m). */
+export const GK_LINE_OFFSET = 0.6;
+/** Limite lateral: largura do gol + esta margem de cada lado (m). */
+export const GK_LATERAL_MARGIN = 0.5;
+/**
+ * Posição lateral do goleiro: 0 = na reta bola -> centro do gol (fecha o ângulo);
+ * 1 = no Y da bola (limitado à largura do gol + margem). Valores no meio misturam.
+ */
+export const GK_Y_FOLLOW = 0.2;
+/** Saída do gol: começa quando a bola está a esta distância (m) e avança até o máximo (m). */
+export const GK_COME_OUT_RANGE = 12;
+export const GK_COME_OUT_MAX = 1.6;
+/** Velocidade do goleiro se posicionando (m/s). */
+export const GK_MOVE_SPEED = 5;
+/** Atraso (constante de tempo, s) com que o goleiro atualiza a posição desejada. */
+export const GK_HOME_SMOOTHING = 0.3;
+/** Tempo de reação a chutes (s) e variação aleatória máxima somada (s). */
+export const GK_REACTION_TIME = 0.15;
+export const GK_REACTION_JITTER = 0.08;
+/** Considera "chute no gol" bolas acima desta velocidade (m/s) rumo à boca do gol. */
+export const GK_THREAT_MIN_SPEED = 6;
+/** Margem (m) além dos postes e do travessão para considerar a bola indo para o gol. */
+export const GK_THREAT_MARGIN = 0.8;
+/** Horizonte (s) de previsão de chute. */
+export const GK_THREAT_HORIZON = 1.5;
+/** Alcance parado: raio (m) e altura (m) das mãos. */
+export const GK_STAND_REACH = 0.55;
+export const GK_STAND_REACH_Z = 2.15;
+/** Mergulho: preparação (s), duração (s), velocidade lateral do corpo (m/s), braço (m),
+ *  raio da mão (m) e altura máxima alcançada (m). */
+export const GK_DIVE_WINDUP = 0.08;
+export const GK_DIVE_DURATION = 0.5;
+export const GK_DIVE_SPEED = 3.0;
+/** Variação aleatória (fração, ±) da velocidade de cada mergulho. */
+export const GK_DIVE_SPEED_JITTER = 0.2;
+/** Variação aleatória (fração, ±) do alcance dos braços a cada lance. */
+export const GK_REACH_JITTER = 0.2;
+export const GK_DIVE_ARM = 0.55;
+export const GK_HAND_RADIUS = 0.2;
+export const GK_DIVE_REACH_Z = 1.6;
+/** Só mergulha se a bola for passar a mais disto (m) do corpo. */
+export const GK_DIVE_MIN_OFFSET = 0.45;
+/** Folga (s) com que o goleiro começa o mergulho antes do último instante possível. */
+export const GK_DIVE_TIMING_SLACK = 0.08;
+/** Velocidade (m/s) dos passos laterais acompanhando um chute antes de mergulhar. */
+export const GK_SHUFFLE_SPEED = 3.0;
+/** Tempo deitado depois do mergulho (s). */
+export const GK_RECOVER_TIME = 0.45;
+/** Até esta velocidade (m/s) segura; acima, espalma. */
+export const GK_CATCH_MAX_SPEED = 15;
+/** Espalmada: fração da velocidade que volta e impulso lateral/vertical (m/s). */
+export const GK_PARRY_SPEED_FACTOR = 0.3;
+export const GK_PARRY_LATERAL_SPEED = 5;
+export const GK_PARRY_UP_SPEED = 2.5;
+/** Depois de espalmar, não toca de novo por (s). */
+export const GK_PARRY_NO_TOUCH = 0.5;
+/** Tempo segurando a bola antes de lançar (s). */
+export const GK_HOLD_TIME = 1;
+/** Altura e distância à frente da bola nas mãos (m). */
+export const GK_HANDS_Z = 1.0;
+export const GK_HANDS_OFFSET = 0.3;
+/** Lançamento por cima: velocidade horizontal desejada (m/s) e limites do tempo de voo (s). */
+export const GK_THROW_HSPEED = 8.5;
+export const GK_THROW_MIN_TIME = 0.6;
+export const GK_THROW_MAX_TIME = 1.5;
+/** Escolha do "mais livre": pontos = menor distância a um adversário - distância * peso. */
+export const GK_THROW_DIST_WEIGHT = 0.12;
+/** Goleiro sai para pegar bola solta lenta (m/s) dentro da área se chegar antes. */
+export const GK_CLAIM_MAX_SPEED = 7;
+export const GK_CLAIM_ADVANTAGE = 0.5;

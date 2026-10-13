@@ -39,9 +39,11 @@ function scoreIn(m: Match, side: 0 | 1, lastTouchTeam: 0 | 1): void {
   placeBall(w.ball, side === 0 ? 3 : 37, 10, 0);
   w.ball.vx = side === 0 ? -15 : 15;
   w.ball.lastTouch = playerId(lastTouchTeam, 'ATA');
-  // Tira os goleiros do caminho (a IA dos goleiros entra na fase 8).
+  // Sem IA durante o lance (goleiros fora), para o gol ser garantido.
+  w.aiEnabled = false;
   for (const p of w.players) if (p.role === 'GK') p.y = p.team === 0 ? 1 : 19;
   runUntil(m, (mm) => mm.phase === 'COMEMORACAO_GOL', 3);
+  w.aiEnabled = true;
 }
 
 function startPlaying(m: Match): void {

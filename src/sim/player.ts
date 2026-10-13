@@ -60,6 +60,9 @@ export interface Player {
   tackleDirY: number;
   /** O carrinho atual já acertou algo. */
   tackleHit: boolean;
+  /** Alvo suavizado da IA (m). */
+  aiTargetX: number;
+  aiTargetY: number;
 }
 
 export function createPlayer(id: number, team: TeamIndex, role: Role): Player {
@@ -86,6 +89,8 @@ export function createPlayer(id: number, team: TeamIndex, role: Role): Player {
     tackleDirX: 1,
     tackleDirY: 0,
     tackleHit: false,
+    aiTargetX: 0,
+    aiTargetY: 0,
   };
 }
 

@@ -228,6 +228,7 @@ describe('a bola nunca sai do campo (fuzz)', () => {
 describe('mundo com bola', () => {
   it('chute para o gol vazio vira gol no mundo e gera evento', () => {
     const w = createWorld();
+    w.aiEnabled = false;
     clearPlayers(w);
     placeBall(w.ball, 30, 10, 0);
     w.ball.vx = 18;
@@ -238,6 +239,7 @@ describe('mundo com bola', () => {
 
   it('bola parada no centro não se mexe sozinha', () => {
     const w = createWorld();
+    w.aiEnabled = false;
     clearPlayers(w);
     steps(w, 60);
     expect(w.ball.x).toBe(20);

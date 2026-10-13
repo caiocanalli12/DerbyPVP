@@ -68,6 +68,11 @@ export class PlayersView {
         sy = s * 0.6;
         alphaBody = 0.7;
         angle = 90;
+      } else if (p.role === 'GK' && (world.keepers[p.team].mode === 'dive' || world.keepers[p.team].mode === 'recover')) {
+        bodyZ = 0.4;
+        sx = s * 1.4;
+        sy = s * 0.65;
+        angle = world.keepers[p.team].diveY > 0 ? 70 : -70;
       } else if (p.state === 'stumbling') {
         wobble = Math.sin(p.stateTimer * 40) * 4 * s;
         angle = Math.sin(p.stateTimer * 25) * 25;

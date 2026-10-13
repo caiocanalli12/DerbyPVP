@@ -27,7 +27,19 @@ import type { GoalSide } from './field';
 import { separatePlayers } from './physics';
 import { clampToField, createPlayer, formationPosition, integrateMovement, ROLES } from './player';
 import type { Player, Role, TeamIndex } from './player';
-import { deflectOffPlayers, findPossessionWinner, placeDribbledBall } from './possession';
+import { bodyHeight, deflectOffPlayers, findPossessionWinner, placeDribbledBall } from './possession';
+import { chooseMarker, faceBallWhenIdle, isAiFieldPlayer, updateFieldAi } from './ai';
+import {
+  clampKeeperToArea,
+  createKeeperState,
+  integrateKeeperDive,
+  keeperBodyHeight,
+  placeBallInHands,
+  resetKeeperState,
+  tryKeeperSave,
+  updateKeeper,
+} from './goalkeeper';
+import type { KeeperState } from './goalkeeper';
 import { integrateSlide, resolveTackleHit, updateBodyState } from './tackle';
 
 export interface PassLock {
@@ -52,6 +64,12 @@ export interface World {
   humans: [HumanState, HumanState];
   /** Passe em andamento: o receptor fica com o controle até a bola chegar. */
   passLock: PassLock | null;
+  /** A bola está nas mãos do goleiro (ninguém rouba). */
+  ballInHands: boolean;
+  /** Estado da IA de cada goleiro (índice = time). */
+  keepers: [KeeperState, KeeperState];
+  /** IA ligada (jogadores de linha e goleiros). Desligar serve para testes e depuração. */
+  aiEnabled: boolean;
   /** Gol marcado neste passo (lado do gol), se houver. A partida decide o que fazer. */
   goal: GoalSide | null;
   /** Eventos acumulados desde a última leitura (drainEvents). */
@@ -76,6 +94,9 @@ export function createWorld(seed = 1): World {
     controlSwitchTimer: [0, 0],
     humans: [createHumanState(), createHumanState()],
     passLock: null,
+    ballInHands: false,
+    keepers: [createKeeperState(), createKeeperState()],
+    aiEnabled: true,
     goal: null,
     events: [],
     rng: new Rng(seed),
@@ -133,7 +154,11 @@ export function resetToFormation(world: World): void {
     p.tackleCooldown = 0;
     p.tackleHit = false;
     p.facing = attackDir(world, p.team) === 1 ? 0 : Math.PI;
+    p.aiTargetX = pos.x;
+    p.aiTargetY = pos.y;
   }
+  for (const k of world.keepers) resetKeeperState(k);
+  world.ballInHands = false;
   world.ball.owner = null;
   world.ball.lastTouch = null;
   placeBall(world.ball, FIELD_CENTER_X, FIELD_CENTER_Y);
@@ -146,6 +171,7 @@ export function resetToFormation(world: World): void {
 export function givePossession(world: World, p: Player): void {
   const previousOwner = world.ball.owner;
   world.ball.owner = p.id;
+  world.ballInHands = false;
   world.ball.lastTouch = p.id;
   world.ball.z = 0;
   world.ball.vz = 0;
@@ -165,6 +191,10 @@ function stepBall(world: World, dt: number): void {
 
   if (ball.owner !== null) {
     const owner = getPlayer(world, ball.owner);
+    if (world.ballInHands) {
+      placeBallInHands(ball, owner);
+      return;
+    }
     if (owner.state === 'normal') {
       placeDribbledBall(ball, owner, dt);
       return;
@@ -181,7 +211,20 @@ function stepBall(world: World, dt: number): void {
     for (const kind of collideBallWithArena(ball)) {
       world.events.push({ type: 'contact', kind, speed: ballSpeed(ball) });
     }
-    const hit = deflectOffPlayers(ball, world.players);
+    // Goleiros: defesa (segura ou espalma) antes de qualquer desvio no corpo.
+    let saved = false;
+    for (const team of world.aiEnabled ? ([0, 1] as const) : ([] as const)) {
+      const gk = getPlayer(world, playerId(team, 'GK'));
+      if (tryKeeperSave(world, gk, world.keepers[team])) {
+        saved = true;
+        break;
+      }
+    }
+    if (ball.owner !== null) return;
+    if (saved) continue;
+    const hit = deflectOffPlayers(ball, world.players, (p) =>
+      p.role === 'GK' ? keeperBodyHeight(world.keepers[p.team], bodyHeight(p)) : bodyHeight(p),
+    );
     if (hit) {
       ball.lastTouch = hit.id;
       // Bola que desviou não é dominada logo em seguida pelo mesmo jogador.
@@ -228,22 +271,43 @@ export function stepWorld(world: World, inputs: HumanInputs, dt: number): void {
     }
   }
 
-  if (world.ball.owner !== null) getPlayer(world, world.ball.owner).maxSpeed *= PLAYER_DRIBBLE_SPEED_FACTOR;
+  // IA: jogadores de linha não controlados e goleiros.
+  for (const team of world.aiEnabled ? ([0, 1] as const) : ([] as const)) {
+    const marker = chooseMarker(world, team);
+    for (const p of world.players) {
+      if (p.team !== team || p.state !== 'normal') continue;
+      if (p.role === 'GK') {
+        updateKeeper(world, p, world.keepers[team], dt, (t, id) => setControlled(world, t, id));
+      } else if (isAiFieldPlayer(world, p)) {
+        updateFieldAi(world, p, marker ? marker.id : null, dt);
+      }
+    }
+  }
+
+  if (world.ball.owner !== null && !world.ballInHands) {
+    getPlayer(world, world.ball.owner).maxSpeed *= PLAYER_DRIBBLE_SPEED_FACTOR;
+  }
 
   for (const p of world.players) {
     if (p.state === 'tackling') integrateSlide(p, dt);
-    else if (p.state !== 'fallen') integrateMovement(p, dt);
+    else if (p.role === 'GK' && world.keepers[p.team].mode === 'dive') integrateKeeperDive(p, world.keepers[p.team], dt);
+    else if (p.role === 'GK' && world.keepers[p.team].mode !== 'position' && world.keepers[p.team].mode !== 'hold') {
+      p.vx = 0;
+      p.vy = 0;
+    } else if (p.state !== 'fallen') integrateMovement(p, dt);
+    if (p.role !== 'GK' && isAiFieldPlayer(world, p)) faceBallWhenIdle(world, p, dt);
   }
 
   // Divididas: só acertam na janela ativa.
   for (const p of world.players) {
     if (p.state !== 'tackling') continue;
     const owner = world.ball.owner !== null ? getPlayer(world, world.ball.owner) : null;
-    if (resolveTackleHit(p, world.ball, owner, false, world.events)) world.passLock = null;
+    if (resolveTackleHit(p, world.ball, owner, world.ballInHands, world.events)) world.passLock = null;
   }
 
   separatePlayers(world.players);
   for (const p of world.players) clampToField(p);
+  for (const team of [0, 1] as const) clampKeeperToArea(getPlayer(world, playerId(team, 'GK')), world.defends[team]);
 
   stepBall(world, dt);
 
