@@ -17,7 +17,8 @@ import { audio } from '../audio/AudioManager';
 import { BallView } from '../render/BallView';
 import { DebugOverlay } from '../render/DebugOverlay';
 import { FieldView } from '../render/FieldView';
-import { PlayersView, TEAM_COLORS } from '../render/PlayersView';
+import { GK_COLORS, PlayersView, TEAM_COLORS } from '../render/PlayersView';
+import { PenaltyView } from '../render/PenaltyView';
 import { IndicatorView } from '../render/IndicatorView';
 import { createMatch, drainMatchEvents, formatClock, PERIOD_LABEL, stepMatch } from '../sim/match';
 import type { Match } from '../sim/match';
@@ -33,6 +34,7 @@ export class MatchScene extends Phaser.Scene {
   private playersView!: PlayersView;
   private ballView!: BallView;
   private indicators!: IndicatorView;
+  private penaltyView!: PenaltyView;
   private chargeBar!: Phaser.GameObjects.Graphics;
   private scoreText!: Phaser.GameObjects.Text;
   private clockText!: Phaser.GameObjects.Text;
@@ -57,6 +59,7 @@ export class MatchScene extends Phaser.Scene {
     this.playersView = new PlayersView(this, world);
     this.ballView = new BallView(this);
     this.indicators = new IndicatorView(this, TEAM_COLORS);
+    this.penaltyView = new PenaltyView(this, TEAM_COLORS, GK_COLORS);
     this.chargeBar = this.add.graphics().setDepth(DEPTH_UI - 10);
     this.debug = new DebugOverlay(this);
 
@@ -115,6 +118,7 @@ export class MatchScene extends Phaser.Scene {
       this.playersView.destroy();
       this.ballView.destroy();
       this.indicators.destroy();
+      this.penaltyView.destroy();
     });
   }
 
@@ -147,6 +151,7 @@ export class MatchScene extends Phaser.Scene {
     this.ballView.update(world.ball, alpha);
     const showIndicators = this.match.phase === 'JOGANDO' || this.match.phase === 'SAIDA_DE_BOLA';
     this.indicators.update(world, alpha, this.time.now / 1000, showIndicators);
+    this.penaltyView.update(this.match, this.time.now / 1000);
     this.drawChargeBars();
     this.drawHud();
     this.drawDebug();
@@ -170,11 +175,14 @@ export class MatchScene extends Phaser.Scene {
       else if (e.type === 'shot') audio.play('chute');
       else if (e.type === 'contact' && (e.kind === 'post' || e.kind === 'bar')) audio.play('trave');
       else if (e.type === 'tackleStart') audio.play('dividida');
+      else if (e.type === 'save') audio.play('defesa');
     }
     for (const e of drainMatchEvents(this.match)) {
       if (e.type === 'whistle') audio.play('apito');
       else if (e.type === 'finalWhistle' || e.type === 'periodEnd') audio.play('apito-final');
       else if (e.type === 'goal') audio.play('gol');
+      else if (e.type === 'penaltyKick') audio.play('chute');
+      else if (e.type === 'penaltyResult' && e.result === 'goal') audio.play('gol');
     }
   }
 
@@ -187,7 +195,7 @@ export class MatchScene extends Phaser.Scene {
     this.cardBg.setVisible(showCard);
     this.cardText.setVisible(showCard);
     if (showCard) {
-      this.cardText.setText(m.phase === 'PENALTIS' ? 'PÊNALTIS\n(disputa na fase 9)' : (m.intertitle ?? ''));
+      this.cardText.setText(m.intertitle ?? '');
     }
 
     if (m.phase === 'COMEMORACAO_GOL') {

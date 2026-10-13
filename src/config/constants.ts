@@ -380,3 +380,41 @@ export const GK_THROW_DIST_WEIGHT = 0.12;
 /** Goleiro sai para pegar bola solta lenta (m/s) dentro da área se chegar antes. */
 export const GK_CLAIM_MAX_SPEED = 7;
 export const GK_CLAIM_ADVANTAGE = 0.5;
+
+// ---------------------------------------------------------------------------
+// Pênaltis
+// ---------------------------------------------------------------------------
+
+/** Cobranças da série regular para cada time. */
+export const PEN_SERIES = 5;
+/** Prazo para chutar (s); estourou, chuta com a carga atual. */
+export const PEN_TIME_LIMIT = 5;
+/** Tempo de preparação antes de liberar a mira (s). */
+export const PEN_SETUP_TIME = 0.8;
+/** Tempo mostrando o resultado de cada cobrança (s). */
+export const PEN_RESULT_TIME = 1.8;
+/** Cursor de mira: velocidade (m/s) e limite (m a partir do centro do gol). */
+export const PEN_CURSOR_SPEED = 2.2;
+export const PEN_CURSOR_LIMIT = 1.5;
+/** Balanço automático do cursor: amplitude (m) e frequência (Hz). */
+export const PEN_SWAY_AMPLITUDE = 0.2;
+export const PEN_SWAY_HZ = 0.7;
+/** Probabilidades de o goleiro escolher esquerda / centro / direita. */
+export const PEN_GK_LEFT = 0.4;
+export const PEN_GK_CENTER = 0.2;
+export const PEN_GK_RIGHT = 0.4;
+/** Faixa externa (fração da largura do gol, de cada lado) que o goleiro não alcança. */
+export const PEN_OUTER_FRACTION = 0.15;
+/** Acima desta força o chute é "muito forte": passa mesmo na zona certa com esta chance. */
+export const PEN_STRONG_POWER = 0.8;
+export const PEN_STRONG_PASS_CHANCE = 0.35;
+/** Abaixo desta força o chute é rasteiro e fácil: o goleiro alcança até a faixa externa. */
+export const PEN_WEAK_POWER = 0.35;
+/** Acima desta força, risco crescente de isolar por cima (até o máximo em 100%). */
+export const PEN_OVER_START = 0.9;
+export const PEN_OVER_MAX_CHANCE = 0.6;
+/** Altura da bola na linha do gol: força 0 e força PEN_OVER_START (m). */
+export const PEN_MIN_HEIGHT = 0.12;
+export const PEN_MAX_HEIGHT = 1.75;
+/** Altura de uma bola isolada (m). */
+export const PEN_OVER_HEIGHT = 2.6;

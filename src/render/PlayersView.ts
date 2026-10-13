@@ -9,7 +9,7 @@ import { FONT_TEXT, INK } from '../art/style';
 import type { World } from '../sim/world';
 
 export const TEAM_COLORS: readonly [number, number] = [0xd8402f, 0x2f6fd8];
-const GK_COLORS: readonly [number, number] = [0xf2a33a, 0x7ad83a];
+export const GK_COLORS: readonly [number, number] = [0xf2a33a, 0x7ad83a];
 /** Altura (m) do centro do "corpo" desenhado. */
 const BODY_Z = 0.85;
 const BODY_R = 0.42;

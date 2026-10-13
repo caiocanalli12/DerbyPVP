@@ -9,6 +9,13 @@
 import {
   DRIBBLE_OFFSET,
   EXTRA_HALF_DURATION,
+  FIELD_LENGTH,
+  GK_CATCH_MAX_SPEED,
+  GK_LINE_OFFSET,
+  GOAL_DEPTH,
+  PEN_RESULT_TIME,
+  PEN_SETUP_TIME,
+  PENALTY_SPOT_DISTANCE,
   GOAL_CELEBRATION_DURATION,
   GOAL_CELEBRATION_SKIP_AFTER,
   HALF_DURATION,
@@ -20,9 +27,29 @@ import { emptyPlayerInput } from '../core/input';
 import { FIELD_CENTER_X, FIELD_CENTER_Y } from './field';
 import type { GoalSide } from './field';
 import type { TeamIndex } from './player';
-import { attackDir, createWorld, getPlayer, givePossession, playerId, resetToFormation, stepWorld } from './world';
+import {
+  attackDir,
+  createWorld,
+  getPlayer,
+  givePossession,
+  playerId,
+  resetToFormation,
+  stepLooseBallPhysics,
+  stepWorld,
+} from './world';
 import type { HumanInputs, World } from './world';
 import { cancelCharge } from './control';
+import { placeBall } from './ball';
+import { placeBallInHands } from './goalkeeper';
+import {
+  createShootout,
+  effectiveAim,
+  kickerRole,
+  recordKick,
+  resolvePenalty,
+  updateAiming,
+} from './penalties';
+import type { PenaltyAttempt, PenaltyResult, PenaltyZone, Shootout } from './penalties';
 
 export type MatchPhase =
   | 'SAIDA_DE_BOLA'
@@ -51,7 +78,9 @@ export type MatchEvent =
   | { type: 'periodEnd'; period: Period }
   | { type: 'sidesSwapped' }
   | { type: 'intertitle'; text: string }
-  | { type: 'finalWhistle' };
+  | { type: 'finalWhistle' }
+  | { type: 'penaltyKick'; team: TeamIndex }
+  | { type: 'penaltyResult'; team: TeamIndex; result: PenaltyResult };
 
 export interface Match {
   world: World;
@@ -71,6 +100,10 @@ export interface Match {
   nextPeriod: Period | null;
   /** A partida terminou (depois do cartão de FIM). */
   over: boolean;
+  /** Disputa de pênaltis (depois do cartão PÊNALTIS). */
+  shootout: Shootout | null;
+  /** Cobrança em andamento. */
+  attempt: PenaltyAttempt | null;
   events: MatchEvent[];
 }
 
@@ -98,10 +131,18 @@ export function createMatch(seed = 1): Match {
     intertitle: null,
     nextPeriod: null,
     over: false,
+    shootout: null,
+    attempt: null,
     events: [],
   };
   setupKickoff(match, 0);
   return match;
+}
+
+/** Vencedor da partida (placar e, se houver, pênaltis); null se empatada/sem fim. */
+export function matchWinner(match: Match): TeamIndex | null {
+  if (match.score[0] !== match.score[1]) return match.score[0] > match.score[1] ? 0 : 1;
+  return match.shootout?.winner ?? null;
 }
 
 /** Devolve e limpa os eventos da partida. */
@@ -290,8 +331,16 @@ export function stepMatch(match: Match, inputs: HumanInputs, dt: number): void {
       break;
 
     case 'PENALTIS':
-      // Disputa de pênaltis entra na fase 9.
       freezeWorld(world);
+      if (!match.shootout) {
+        if (match.phaseTimer >= INTERTITLE_DURATION) {
+          match.intertitle = null;
+          match.shootout = createShootout();
+          startAttempt(match);
+        }
+        break;
+      }
+      stepPenalties(match, inputs, dt);
       break;
 
     case 'FIM':
@@ -299,6 +348,182 @@ export function stepMatch(match: Match, inputs: HumanInputs, dt: number): void {
       if (match.phaseTimer >= INTERTITLE_DURATION) match.over = true;
       break;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Pênaltis (todas as cobranças no gol da direita)
+// ---------------------------------------------------------------------------
+
+/** Gol das cobranças. */
+export const PENALTY_GOAL: GoalSide = 1;
+const PEN_GOAL_X = FIELD_LENGTH;
+const PEN_SPOT_X = FIELD_LENGTH - PENALTY_SPOT_DISTANCE;
+
+function setPos(p: { x: number; y: number; prevX: number; prevY: number; vx: number; vy: number }, x: number, y: number): void {
+  p.x = x;
+  p.y = y;
+  p.prevX = x;
+  p.prevY = y;
+  p.vx = 0;
+  p.vy = 0;
+}
+
+/** Arruma o cenário de uma cobrança: batedor na marca, goleiro na linha, os outros no meio. */
+function startAttempt(match: Match): void {
+  const s = match.shootout;
+  if (!s) return;
+  const world = match.world;
+  const team = s.turn;
+  const other: TeamIndex = team === 0 ? 1 : 0;
+  const kicker = getPlayer(world, playerId(team, kickerRole(s, team)));
+  const keeper = getPlayer(world, playerId(other, 'GK'));
+  for (const k of world.keepers) {
+    k.mode = 'position';
+    k.timer = 0;
+  }
+  world.ballInHands = false;
+  world.ball.owner = null;
+  for (const h of world.humans) cancelCharge(h);
+
+  // Os que não participam ficam em fila perto do círculo central.
+  let i0 = 0;
+  let i1 = 0;
+  for (const p of world.players) {
+    p.state = 'normal';
+    if (p.id === kicker.id || p.id === keeper.id) continue;
+    if (p.team === 0) setPos(p, 17.5 - (i0++ % 2) * 1.2, 6 + Math.floor((i0 - 1) / 2) * 1.6);
+    else setPos(p, 22.5 + (i1++ % 2) * 1.2, 6 + Math.floor((i1 - 1) / 2) * 1.6);
+    p.facing = 0;
+  }
+  setPos(kicker, PEN_SPOT_X - DRIBBLE_OFFSET - 0.25, FIELD_CENTER_Y);
+  kicker.facing = 0;
+  setPos(keeper, PEN_GOAL_X - GK_LINE_OFFSET * 0.6, FIELD_CENTER_Y);
+  keeper.facing = Math.PI;
+  placeBall(world.ball, PEN_SPOT_X, FIELD_CENTER_Y, 0);
+  world.controlled = [team === 0 ? kicker.id : playerId(0, 'ATA'), team === 1 ? kicker.id : playerId(1, 'ATA')];
+
+  match.attempt = {
+    team,
+    kicker: kicker.id,
+    keeper: keeper.id,
+    phase: 'setup',
+    timer: 0,
+    aimTime: 0,
+    cursor: 0,
+    charging: false,
+    charge: 0,
+    plan: null,
+  };
+}
+
+/** Deslocamento lateral (m) do goleiro para cada zona. */
+const ZONE_OFFSET: Readonly<Record<PenaltyZone, number>> = { L: -1, C: 0, R: 1 };
+
+function stepPenalties(match: Match, inputs: HumanInputs, dt: number): void {
+  const s = match.shootout;
+  const a = match.attempt;
+  if (!s || !a) return;
+  const world = match.world;
+  const ball = world.ball;
+  const keeper = getPlayer(world, a.keeper);
+  const keeperState = world.keepers[keeper.team];
+  a.timer += dt;
+
+  switch (a.phase) {
+    case 'setup':
+      if (a.timer >= PEN_SETUP_TIME) {
+        a.phase = 'aiming';
+        a.timer = 0;
+        match.events.push({ type: 'whistle' });
+      }
+      return;
+
+    case 'aiming': {
+      const power = updateAiming(a, inputs[a.team], dt);
+      if (power === null) return;
+      a.plan = resolvePenalty(effectiveAim(a), power, world.rng);
+      a.phase = 'flight';
+      a.timer = 0;
+      a.charging = false;
+      match.events.push({ type: 'penaltyKick', team: a.team });
+      // O goleiro mergulha para a zona escolhida.
+      if (a.plan.keeperZone !== 'C') {
+        keeperState.mode = 'dive';
+        keeperState.timer = 0;
+        keeperState.diveX = 0;
+        keeperState.diveY = ZONE_OFFSET[a.plan.keeperZone];
+      }
+      return;
+    }
+
+    case 'flight': {
+      const plan = a.plan;
+      if (!plan) return;
+      const startX = PEN_SPOT_X;
+      const endX = PEN_GOAL_X + 0.05;
+      const endY = FIELD_CENTER_Y + plan.offset;
+      const dist = Math.hypot(endX - startX, endY - FIELD_CENTER_Y);
+      const T = dist / plan.speed;
+      const u = Math.min(1, a.timer / T);
+      const prev = { x: ball.x, y: ball.y, z: ball.z };
+      ball.x = lerp(startX, endX, u);
+      ball.y = lerp(FIELD_CENTER_Y, endY, u);
+      ball.z = plan.height * u + 0.3 * plan.power * 4 * u * (1 - u);
+      ball.prevX = prev.x;
+      ball.prevY = prev.y;
+      ball.prevZ = prev.z;
+      // Goleiro desliza até a zona escolhida enquanto a bola viaja.
+      const gy = FIELD_CENTER_Y + ZONE_OFFSET[plan.keeperZone] * Math.min(1, a.timer / Math.max(T, 0.25));
+      keeper.prevX = keeper.x;
+      keeper.prevY = keeper.y;
+      keeper.y = gy;
+      if (u < 1) return;
+
+      // Chegou: aplica o resultado e deixa a física continuar.
+      const vx = (endX - startX) / T;
+      const vy = (endY - FIELD_CENTER_Y) / T;
+      ball.lastTouch = a.kicker;
+      if (plan.result === 'goal' || plan.reason === 'wide' || plan.reason === 'over') {
+        ball.vx = vx;
+        ball.vy = vy;
+        ball.vz = 0;
+        if (plan.result === 'goal') ball.x = Math.min(ball.x, PEN_GOAL_X + GOAL_DEPTH * 0.3);
+      } else if (plan.speed <= GK_CATCH_MAX_SPEED) {
+        ball.owner = keeper.id;
+        world.ballInHands = true;
+        keeper.facing = Math.PI;
+        placeBallInHands(ball, keeper);
+        world.events.push({ type: 'save', player: keeper.id, result: 'catch' });
+      } else {
+        ball.vx = -vx * 0.3;
+        ball.vy = Math.sign(plan.offset || 1) * 5;
+        ball.vz = 2.5;
+        world.events.push({ type: 'save', player: keeper.id, result: 'parry' });
+      }
+      a.phase = 'result';
+      a.timer = 0;
+      match.events.push({ type: 'penaltyResult', team: a.team, result: plan.result });
+      return;
+    }
+
+    case 'result':
+      if (ball.owner === null) stepLooseBallPhysics(world, dt);
+      else placeBallInHands(ball, keeper);
+      if (a.timer >= PEN_RESULT_TIME && a.plan) {
+        recordKick(s, a.plan.result);
+        if (s.winner !== null) {
+          match.attempt = null;
+          finish(match);
+        } else {
+          startAttempt(match);
+        }
+      }
+      return;
+  }
+}
+
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
 }
 
 /** Relógio no formato do placar: "01:12". */

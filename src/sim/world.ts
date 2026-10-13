@@ -182,6 +182,19 @@ export function givePossession(world: World, p: Player): void {
   world.events.push({ type: 'possession', player: p.id, previousOwner });
 }
 
+/** Física só da bola solta (sem jogadores), com subpassos: usada em lances roteirizados (pênaltis). */
+export function stepLooseBallPhysics(world: World, dt: number): void {
+  const ball = world.ball;
+  ball.prevX = ball.x;
+  ball.prevY = ball.y;
+  ball.prevZ = ball.z;
+  const n = substepsFor(ball, dt, BALL_MAX_SUBSTEP_DIST);
+  for (let i = 0; i < n; i++) {
+    integrateFreeBall(ball, dt / n);
+    for (const kind of collideBallWithArena(ball)) world.events.push({ type: 'contact', kind, speed: ballSpeed(ball) });
+  }
+}
+
 /** Atualiza a bola: conduzida (presa ao dono) ou solta (física com subpassos). */
 function stepBall(world: World, dt: number): void {
   const ball = world.ball;
