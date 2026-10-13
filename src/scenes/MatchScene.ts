@@ -7,7 +7,9 @@ import {
   PLAYER_RADIUS,
   POSSESSION_RADIUS,
   SIM_DT,
+  TACKLE_HITBOX_RADIUS,
 } from '../config/constants';
+import { isTackleActive, tackleFootTip } from '../sim/tackle';
 import { keyboard } from '../core/input';
 import type { InputFrame } from '../core/input';
 import { DEPTH_UI, PPM, project } from '../core/projection';
@@ -167,6 +169,7 @@ export class MatchScene extends Phaser.Scene {
       if (e.type === 'pass') audio.play('passe');
       else if (e.type === 'shot') audio.play('chute');
       else if (e.type === 'contact' && (e.kind === 'post' || e.kind === 'bar')) audio.play('trave');
+      else if (e.type === 'tackleStart') audio.play('dividida');
     }
     for (const e of drainMatchEvents(this.match)) {
       if (e.type === 'whistle') audio.play('apito');
@@ -227,6 +230,11 @@ export class MatchScene extends Phaser.Scene {
           p.y + 0.9,
           `${p.number} (${p.x.toFixed(1)}, ${p.y.toFixed(1)}) ${Math.hypot(p.vx, p.vy).toFixed(1)}m/s`,
         );
+      }
+      for (const p of world.players) {
+        if (p.state !== 'tackling') continue;
+        const tip = tackleFootTip(p);
+        this.debug.circle(tip.x, tip.y, TACKLE_HITBOX_RADIUS, isTackleActive(p) ? 0xff2020 : 0x808080);
       }
       const b = world.ball;
       this.debug.circle(b.x, b.y, BALL_RADIUS, 0xffffff);

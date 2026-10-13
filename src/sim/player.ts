@@ -17,6 +17,12 @@ import { rotateTowards } from './vec';
 export type Role = 'GK' | 'FIXO' | 'ALA_D' | 'ALA_E' | 'ATA';
 export type TeamIndex = 0 | 1;
 
+/**
+ * Estado do corpo: normal, deslizando num carrinho, caído (errou o carrinho) ou
+ * cambaleando (perdeu a bola numa dividida). Fora do normal, não há controle nem toque na bola.
+ */
+export type PlayerState = 'normal' | 'tackling' | 'fallen' | 'stumbling';
+
 /** Ordem dos jogadores dentro de cada time. */
 export const ROLES: readonly Role[] = ['GK', 'FIXO', 'ALA_D', 'ALA_E', 'ATA'];
 export const ROLE_NUMBER: Readonly<Record<Role, number>> = { GK: 1, FIXO: 4, ALA_D: 7, ALA_E: 11, ATA: 9 };
@@ -44,6 +50,16 @@ export interface Player {
   noTouchTimer: number;
   /** Fase do balanço de condução (rad). */
   dribblePhase: number;
+  state: PlayerState;
+  /** Tempo (s) no estado atual. */
+  stateTimer: number;
+  /** Recarga da dividida (s). */
+  tackleCooldown: number;
+  /** Direção do carrinho (unitária). */
+  tackleDirX: number;
+  tackleDirY: number;
+  /** O carrinho atual já acertou algo. */
+  tackleHit: boolean;
 }
 
 export function createPlayer(id: number, team: TeamIndex, role: Role): Player {
@@ -64,7 +80,19 @@ export function createPlayer(id: number, team: TeamIndex, role: Role): Player {
     maxSpeed: PLAYER_RUN_SPEED,
     noTouchTimer: 0,
     dribblePhase: 0,
+    state: 'normal',
+    stateTimer: 0,
+    tackleCooldown: 0,
+    tackleDirX: 1,
+    tackleDirY: 0,
+    tackleHit: false,
   };
+}
+
+/** Muda o estado do corpo e zera o cronômetro do estado. */
+export function setPlayerState(p: Player, state: PlayerState): void {
+  p.state = state;
+  p.stateTimer = 0;
 }
 
 /** Posição da formação base de um papel para o time que defende o gol `side`. */

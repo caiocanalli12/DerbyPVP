@@ -12,6 +12,7 @@ import {
 } from '../config/constants';
 import type { PlayerInput } from '../core/input';
 import { choosePassTarget, planPass, releaseBall, shotVelocity } from './kick';
+import { startTackle } from './tackle';
 import type { Player, TeamIndex } from './player';
 import type { World } from './world';
 import { getPlayer } from './world';
@@ -125,7 +126,7 @@ export function performShot(world: World, p: Player, charge: number, input: Play
 
 /**
  * Ações do jogador controlado pelo humano `team` neste passo.
- * Com a bola: passe (F / ;) ou carga e chute (G / .). Sem a bola: (dividida na fase 7).
+ * Com a bola: passe (F / ;) ou carga e chute (G / .). Sem a bola: chute = dividida.
  */
 export function handleHumanActions(world: World, team: TeamIndex, input: PlayerInput, dt: number): void {
   const h = world.humans[team];
@@ -134,7 +135,16 @@ export function handleHumanActions(world: World, team: TeamIndex, input: PlayerI
 
   // Perdeu a bola enquanto carregava: a carga é cancelada.
   if (h.charging && !hasBall) cancelCharge(h);
-  if (!hasBall) return;
+  // Deslizando, caído ou cambaleando: sem ações.
+  if (p.state !== 'normal') return;
+
+  if (!hasBall) {
+    // Chute sem a bola = dividida.
+    if (input.shoot.pressed && startTackle(p, input.moveX, input.moveY)) {
+      world.events.push({ type: 'tackleStart', player: p.id });
+    }
+    return;
+  }
 
   if (!h.charging && input.pass.pressed) {
     const d = actionDirection(p, input);

@@ -28,6 +28,7 @@ import { separatePlayers } from './physics';
 import { clampToField, createPlayer, formationPosition, integrateMovement, ROLES } from './player';
 import type { Player, Role, TeamIndex } from './player';
 import { deflectOffPlayers, findPossessionWinner, placeDribbledBall } from './possession';
+import { integrateSlide, resolveTackleHit, updateBodyState } from './tackle';
 
 export interface PassLock {
   team: TeamIndex;
@@ -127,6 +128,10 @@ export function resetToFormation(world: World): void {
     p.moveX = 0;
     p.moveY = 0;
     p.noTouchTimer = 0;
+    p.state = 'normal';
+    p.stateTimer = 0;
+    p.tackleCooldown = 0;
+    p.tackleHit = false;
     p.facing = attackDir(world, p.team) === 1 ? 0 : Math.PI;
   }
   world.ball.owner = null;
@@ -159,8 +164,13 @@ function stepBall(world: World, dt: number): void {
   ball.prevZ = ball.z;
 
   if (ball.owner !== null) {
-    placeDribbledBall(ball, getPlayer(world, ball.owner), dt);
-    return;
+    const owner = getPlayer(world, ball.owner);
+    if (owner.state === 'normal') {
+      placeDribbledBall(ball, owner, dt);
+      return;
+    }
+    // Segurança: quem não está de pé não conduz.
+    ball.owner = null;
   }
 
   const n = substepsFor(ball, dt, BALL_MAX_SUBSTEP_DIST);
@@ -198,24 +208,40 @@ export function stepWorld(world: World, inputs: HumanInputs, dt: number): void {
     p.moveY = 0;
     p.maxSpeed = PLAYER_RUN_SPEED;
     if (p.noTouchTimer > 0) p.noTouchTimer = Math.max(0, p.noTouchTimer - dt);
+    const before = p.state;
+    updateBodyState(p, dt);
+    if (before === 'tackling' && p.state === 'fallen') world.events.push({ type: 'tackleMiss', player: p.id });
   }
   if (world.passLock && world.time > world.passLock.until) world.passLock = null;
 
   // Troca automática de quem cada humano controla.
   for (const team of [0, 1] as const) updateAutoControl(world, team, dt);
 
-  // Humanos: cada um move o jogador que controla e age (passe/chute).
+  // Humanos: cada um move o jogador que controla e age (passe/chute/dividida).
   for (const team of [0, 1] as const) {
     const input = inputs[team];
     handleHumanActions(world, team, input, dt);
     const p = getPlayer(world, world.controlled[team]);
-    p.moveX = input.moveX;
-    p.moveY = input.moveY;
+    if (p.state === 'normal') {
+      p.moveX = input.moveX;
+      p.moveY = input.moveY;
+    }
   }
 
   if (world.ball.owner !== null) getPlayer(world, world.ball.owner).maxSpeed *= PLAYER_DRIBBLE_SPEED_FACTOR;
 
-  for (const p of world.players) integrateMovement(p, dt);
+  for (const p of world.players) {
+    if (p.state === 'tackling') integrateSlide(p, dt);
+    else if (p.state !== 'fallen') integrateMovement(p, dt);
+  }
+
+  // Divididas: só acertam na janela ativa.
+  for (const p of world.players) {
+    if (p.state !== 'tackling') continue;
+    const owner = world.ball.owner !== null ? getPlayer(world, world.ball.owner) : null;
+    if (resolveTackleHit(p, world.ball, owner, false, world.events)) world.passLock = null;
+  }
+
   separatePlayers(world.players);
   for (const p of world.players) clampToField(p);
 

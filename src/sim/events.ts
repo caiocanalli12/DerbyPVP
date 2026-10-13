@@ -10,4 +10,7 @@ export type SimEvent =
   | { type: 'possession'; player: number; previousOwner: number | null }
   | { type: 'deflect'; player: number }
   | { type: 'contact'; kind: BallContact; speed: number }
-  | { type: 'goal'; side: GoalSide; lastTouch: number | null };
+  | { type: 'goal'; side: GoalSide; lastTouch: number | null }
+  | { type: 'tackleStart'; player: number }
+  | { type: 'tackle'; player: number; result: 'steal' | 'loose'; victim: number | null }
+  | { type: 'tackleMiss'; player: number };

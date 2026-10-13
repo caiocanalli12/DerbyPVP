@@ -51,9 +51,38 @@ export class PlayersView {
       g.shadow.setPosition(ground.x, ground.y).setSize(PLAYER_RADIUS * 2 * PPM * s, PLAYER_RADIUS * 1.1 * PPM * s);
       g.shadow.setDisplaySize(PLAYER_RADIUS * 2 * PPM * s, PLAYER_RADIUS * 1.1 * PPM * s);
 
-      const bodyPos = project(x, y, BODY_Z);
-      g.body.setPosition(bodyPos.x, bodyPos.y).setScale(s).setDepth(depth);
-      g.number.setPosition(bodyPos.x, bodyPos.y).setScale(s).setDepth(depth + 0.1);
+      // Estados do corpo (provisório até a arte da fase 10).
+      let bodyZ = BODY_Z;
+      let sx = s;
+      let sy = s;
+      let wobble = 0;
+      let alphaBody = 1;
+      let angle = 0;
+      if (p.state === 'tackling') {
+        bodyZ = 0.35;
+        sx = s * 1.35;
+        sy = s * 0.7;
+      } else if (p.state === 'fallen') {
+        bodyZ = 0.3;
+        sx = s * 1.3;
+        sy = s * 0.6;
+        alphaBody = 0.7;
+        angle = 90;
+      } else if (p.state === 'stumbling') {
+        wobble = Math.sin(p.stateTimer * 40) * 4 * s;
+        angle = Math.sin(p.stateTimer * 25) * 25;
+      }
+      const bodyPos = project(x, y, bodyZ);
+      g.body
+        .setPosition(bodyPos.x + wobble, bodyPos.y)
+        .setScale(sx, sy)
+        .setAlpha(alphaBody)
+        .setDepth(depth);
+      g.number
+        .setPosition(bodyPos.x + wobble, bodyPos.y)
+        .setScale(s)
+        .setAngle(angle)
+        .setDepth(depth + 0.1);
 
       const tip = project(x + Math.cos(p.facing) * 0.7, y + Math.sin(p.facing) * 0.7, 0);
       g.facing.setTo(ground.x, ground.y, tip.x, tip.y).setPosition(0, 0).setDepth(DEPTH_SHADOWS + 1);

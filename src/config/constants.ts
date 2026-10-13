@@ -246,3 +246,26 @@ export const INDICATOR_BOB_HZ = 1.6;
 /** Linhas que "fervem": deslocamento máximo (px) e trocas por segundo. */
 export const BOIL_JITTER = 1.5;
 export const BOIL_FPS = 12;
+
+// ---------------------------------------------------------------------------
+// Dividida (carrinho)
+// ---------------------------------------------------------------------------
+
+/** Distância deslizada (m) e duração do deslize (s). */
+export const TACKLE_DISTANCE = 2.5;
+export const TACKLE_DURATION = 0.35;
+/** Fração de velocidade perdida do início ao fim do deslize (0 = constante). */
+export const TACKLE_SLIDE_DECEL = 0.5;
+/** Janela ativa (s), centrada no meio do deslize: só nela a dividida acerta. */
+export const TACKLE_ACTIVE_WINDOW = 0.12;
+/** Raio da hitbox na ponta do pé e distância dela ao centro do corpo (m). */
+export const TACKLE_HITBOX_RADIUS = 0.45;
+export const TACKLE_FOOT_REACH = 0.5;
+/** Velocidade com que a bola sai depois de uma dividida certa. */
+export const TACKLE_BALL_SPEED = 6;
+/** Tempo cambaleando (sem controle) de quem perdeu a bola. */
+export const TACKLE_STUMBLE_TIME = 0.5;
+/** Tempo caído depois de errar a dividida. */
+export const TACKLE_FALLEN_TIME = 0.8;
+/** Recarga entre divididas (s, a partir do início). */
+export const TACKLE_COOLDOWN = 1.2;

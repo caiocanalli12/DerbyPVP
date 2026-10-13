@@ -21,9 +21,9 @@ import type { Ball } from './ball';
 import type { Player } from './player';
 import { clamp } from './vec';
 
-/** Pode tocar na bola agora? (Estados como carrinho/caído entram nas próximas fases.) */
+/** Pode tocar na bola agora? (Deslizando, caído ou cambaleando: não.) */
 export function canTouchBall(p: Player): boolean {
-  return p.noTouchTimer <= 0;
+  return p.noTouchTimer <= 0 && p.state === 'normal';
 }
 
 /** Pode ganhar a posse pela regra geral? O goleiro usa a própria lógica (defesa/pegada). */
