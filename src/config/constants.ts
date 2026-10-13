@@ -219,3 +219,30 @@ export const GOAL_CELEBRATION_DURATION = 3;
 export const GOAL_CELEBRATION_SKIP_AFTER = 1;
 /** Distância do centro em que o atacante do time que não sai fica na saída de bola. */
 export const KICKOFF_DEFENDER_DISTANCE = 3.6;
+
+// ---------------------------------------------------------------------------
+// Troca automática de controle
+// ---------------------------------------------------------------------------
+
+/** Antecipação usada para prever a bola: posição + velocidade * isto (s). */
+export const CONTROL_PREDICT_TIME = 0.3;
+/** O novo candidato precisa estar pelo menos isto mais perto (m) que o atual. */
+export const CONTROL_SWITCH_MARGIN = 1;
+/** Intervalo mínimo entre trocas automáticas (s). */
+export const CONTROL_SWITCH_COOLDOWN = 0.25;
+
+// ---------------------------------------------------------------------------
+// Indicador do jogador controlado
+// ---------------------------------------------------------------------------
+
+/** Altura (m) da ponta do triângulo acima do chão. */
+export const INDICATOR_HEIGHT = 2.35;
+/** Largura e altura do triângulo (px, na escala 1). */
+export const INDICATOR_WIDTH = 24;
+export const INDICATOR_TRI_HEIGHT = 18;
+/** Flutuação: amplitude (px) e frequência (Hz). */
+export const INDICATOR_BOB_AMPLITUDE = 4;
+export const INDICATOR_BOB_HZ = 1.6;
+/** Linhas que "fervem": deslocamento máximo (px) e trocas por segundo. */
+export const BOIL_JITTER = 1.5;
+export const BOIL_FPS = 12;

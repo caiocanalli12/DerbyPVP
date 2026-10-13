@@ -15,7 +15,8 @@ import { audio } from '../audio/AudioManager';
 import { BallView } from '../render/BallView';
 import { DebugOverlay } from '../render/DebugOverlay';
 import { FieldView } from '../render/FieldView';
-import { PlayersView } from '../render/PlayersView';
+import { PlayersView, TEAM_COLORS } from '../render/PlayersView';
+import { IndicatorView } from '../render/IndicatorView';
 import { createMatch, drainMatchEvents, formatClock, PERIOD_LABEL, stepMatch } from '../sim/match';
 import type { Match } from '../sim/match';
 import { drainEvents, getPlayer } from '../sim/world';
@@ -29,6 +30,7 @@ export class MatchScene extends Phaser.Scene {
   private debug!: DebugOverlay;
   private playersView!: PlayersView;
   private ballView!: BallView;
+  private indicators!: IndicatorView;
   private chargeBar!: Phaser.GameObjects.Graphics;
   private scoreText!: Phaser.GameObjects.Text;
   private clockText!: Phaser.GameObjects.Text;
@@ -52,6 +54,7 @@ export class MatchScene extends Phaser.Scene {
     new FieldView(this);
     this.playersView = new PlayersView(this, world);
     this.ballView = new BallView(this);
+    this.indicators = new IndicatorView(this, TEAM_COLORS);
     this.chargeBar = this.add.graphics().setDepth(DEPTH_UI - 10);
     this.debug = new DebugOverlay(this);
 
@@ -109,6 +112,7 @@ export class MatchScene extends Phaser.Scene {
       this.debug.destroy();
       this.playersView.destroy();
       this.ballView.destroy();
+      this.indicators.destroy();
     });
   }
 
@@ -139,6 +143,8 @@ export class MatchScene extends Phaser.Scene {
     const alpha = this.paused ? 1 : this.accumulator / SIM_DT;
     this.playersView.update(world, alpha);
     this.ballView.update(world.ball, alpha);
+    const showIndicators = this.match.phase === 'JOGANDO' || this.match.phase === 'SAIDA_DE_BOLA';
+    this.indicators.update(world, alpha, this.time.now / 1000, showIndicators);
     this.drawChargeBars();
     this.drawHud();
     this.drawDebug();

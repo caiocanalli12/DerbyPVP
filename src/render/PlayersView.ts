@@ -8,7 +8,7 @@ import { DEPTH_SHADOWS, depthFor, PPM, project } from '../core/projection';
 import { FONT_TEXT, INK } from '../art/style';
 import type { World } from '../sim/world';
 
-const TEAM_COLORS: readonly [number, number] = [0xd8402f, 0x2f6fd8];
+export const TEAM_COLORS: readonly [number, number] = [0xd8402f, 0x2f6fd8];
 const GK_COLORS: readonly [number, number] = [0xf2a33a, 0x7ad83a];
 /** Altura (m) do centro do "corpo" desenhado. */
 const BODY_Z = 0.85;
@@ -19,7 +19,6 @@ interface PlayerGfx {
   body: Phaser.GameObjects.Arc;
   facing: Phaser.GameObjects.Line;
   number: Phaser.GameObjects.Text;
-  tag: Phaser.GameObjects.Text;
 }
 
 export class PlayersView {
@@ -34,17 +33,7 @@ export class PlayersView {
       const number = scene.add
         .text(0, 0, String(p.number), { fontFamily: FONT_TEXT, fontSize: '16px', fontStyle: '700', color: '#ffffff' })
         .setOrigin(0.5);
-      const tag = scene.add
-        .text(0, 0, p.team === 0 ? 'J1' : 'J2', {
-          fontFamily: FONT_TEXT,
-          fontSize: '14px',
-          fontStyle: '700',
-          color: '#ffffff',
-          stroke: '#1A1410',
-          strokeThickness: 4,
-        })
-        .setOrigin(0.5, 1);
-      this.gfx.push({ shadow, body, facing, number, tag });
+      this.gfx.push({ shadow, body, facing, number });
     }
   }
 
@@ -68,13 +57,6 @@ export class PlayersView {
 
       const tip = project(x + Math.cos(p.facing) * 0.7, y + Math.sin(p.facing) * 0.7, 0);
       g.facing.setTo(ground.x, ground.y, tip.x, tip.y).setPosition(0, 0).setDepth(DEPTH_SHADOWS + 1);
-
-      const controlled = world.controlled[p.team] === p.id;
-      g.tag.setVisible(controlled);
-      if (controlled) {
-        const head = project(x, y, BODY_Z + BODY_R + 0.25);
-        g.tag.setPosition(head.x, head.y).setDepth(depth + 0.2);
-      }
     });
   }
 
@@ -84,7 +66,6 @@ export class PlayersView {
       g.body.destroy();
       g.facing.destroy();
       g.number.destroy();
-      g.tag.destroy();
     }
     this.gfx.length = 0;
   }

@@ -143,6 +143,7 @@ export function setupKickoff(match: Match, team: TeamIndex): void {
   rival.prevY = rival.y;
 
   world.controlled = [playerId(0, 'ATA'), playerId(1, 'ATA')];
+  world.controlSwitchTimer = [0, 0];
   givePossession(world, kicker);
   // A posse inicial não é um "evento de jogo".
   world.events = world.events.filter((e) => e.type !== 'possession');

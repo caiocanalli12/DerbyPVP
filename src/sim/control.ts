@@ -1,8 +1,15 @@
 /**
- * O que cada humano controla e as ações do jogador controlado (passe, carga e chute).
- * A troca automática completa (com histerese) entra na fase 6.
+ * O que cada humano controla (troca automática com histerese) e as ações do jogador
+ * controlado (passe, carga e chute).
  */
-import { PASS_RECEIVER_LOCK_EXTRA, SHOT_CHARGE_TIME, PASS_NO_TARGET_SPEED } from '../config/constants';
+import {
+  CONTROL_PREDICT_TIME,
+  CONTROL_SWITCH_COOLDOWN,
+  CONTROL_SWITCH_MARGIN,
+  PASS_NO_TARGET_SPEED,
+  PASS_RECEIVER_LOCK_EXTRA,
+  SHOT_CHARGE_TIME,
+} from '../config/constants';
 import type { PlayerInput } from '../core/input';
 import { choosePassTarget, planPass, releaseBall, shotVelocity } from './kick';
 import type { Player, TeamIndex } from './player';
@@ -31,7 +38,56 @@ export function setControlled(world: World, team: TeamIndex, playerId: number): 
   const p = getPlayer(world, playerId);
   if (p.team !== team || p.role === 'GK') return;
   world.controlled[team] = playerId;
+  world.controlSwitchTimer[team] = 0;
   cancelCharge(world.humans[team]);
+}
+
+/** Posição prevista da bola daqui a CONTROL_PREDICT_TIME. */
+export function predictedBall(world: World): { x: number; y: number } {
+  const b = world.ball;
+  return { x: b.x + b.vx * CONTROL_PREDICT_TIME, y: b.y + b.vy * CONTROL_PREDICT_TIME };
+}
+
+/**
+ * Troca automática de controle de um time:
+ * - o time tem a bola (jogador de linha): quem está com ela;
+ * - passe em andamento para um companheiro: o receptor (já trocado na hora do passe);
+ * - senão: o jogador de linha mais perto da bola prevista, com histerese
+ *   (CONTROL_SWITCH_MARGIN m mais perto e no máximo uma troca a cada CONTROL_SWITCH_COOLDOWN s).
+ */
+export function updateAutoControl(world: World, team: TeamIndex, dt: number): void {
+  world.controlSwitchTimer[team] += dt;
+
+  const owner = world.ball.owner !== null ? getPlayer(world, world.ball.owner) : null;
+  if (owner && owner.team === team && owner.role !== 'GK') {
+    setControlled(world, team, owner.id);
+    return;
+  }
+
+  const lock = world.passLock;
+  if (lock && lock.team === team) {
+    setControlled(world, team, lock.receiver);
+    return;
+  }
+
+  if (world.controlSwitchTimer[team] < CONTROL_SWITCH_COOLDOWN) return;
+
+  const target = predictedBall(world);
+  const current = getPlayer(world, world.controlled[team]);
+  const curDist = Math.hypot(current.x - target.x, current.y - target.y);
+  let best: Player | null = null;
+  let bestDist = Infinity;
+  for (const p of world.players) {
+    if (p.team !== team || p.role === 'GK') continue;
+    const d = Math.hypot(p.x - target.x, p.y - target.y);
+    if (d < bestDist) {
+      bestDist = d;
+      best = p;
+    }
+  }
+  if (best && best.id !== current.id && bestDist + CONTROL_SWITCH_MARGIN <= curDist) {
+    setControlled(world, team, best.id);
+  }
 }
 
 /** Direção de ação: o direcional, ou para onde o jogador está virado. */

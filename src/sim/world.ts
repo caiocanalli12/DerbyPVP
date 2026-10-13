@@ -19,7 +19,7 @@ import {
   substepsFor,
 } from './ball';
 import type { Ball } from './ball';
-import { cancelCharge, createHumanState, handleHumanActions, setControlled } from './control';
+import { cancelCharge, createHumanState, handleHumanActions, setControlled, updateAutoControl } from './control';
 import type { HumanState } from './control';
 import type { SimEvent } from './events';
 import { FIELD_CENTER_X, FIELD_CENTER_Y } from './field';
@@ -46,6 +46,8 @@ export interface World {
   defends: [GoalSide, GoalSide];
   /** Jogador controlado por cada humano (J1 controla o time 0, J2 o time 1). */
   controlled: [number, number];
+  /** Tempo (s) desde a última troca de controle de cada humano. */
+  controlSwitchTimer: [number, number];
   humans: [HumanState, HumanState];
   /** Passe em andamento: o receptor fica com o controle até a bola chegar. */
   passLock: PassLock | null;
@@ -70,6 +72,7 @@ export function createWorld(seed = 1): World {
     ball: createBall(),
     defends: [0, 1],
     controlled: [playerId(0, 'ATA'), playerId(1, 'ATA')],
+    controlSwitchTimer: [0, 0],
     humans: [createHumanState(), createHumanState()],
     passLock: null,
     goal: null,
@@ -141,7 +144,8 @@ export function givePossession(world: World, p: Player): void {
   world.ball.lastTouch = p.id;
   world.ball.z = 0;
   world.ball.vz = 0;
-  if (world.passLock && (world.passLock.receiver === p.id || world.passLock.team !== p.team)) world.passLock = null;
+  // Qualquer domínio encerra o passe em andamento.
+  world.passLock = null;
   // Quem ganha a bola passa a ser controlado na hora (exceção da histerese).
   if (p.role !== 'GK') setControlled(world, p.team, p.id);
   world.events.push({ type: 'possession', player: p.id, previousOwner });
@@ -196,6 +200,9 @@ export function stepWorld(world: World, inputs: HumanInputs, dt: number): void {
     if (p.noTouchTimer > 0) p.noTouchTimer = Math.max(0, p.noTouchTimer - dt);
   }
   if (world.passLock && world.time > world.passLock.until) world.passLock = null;
+
+  // Troca automática de quem cada humano controla.
+  for (const team of [0, 1] as const) updateAutoControl(world, team, dt);
 
   // Humanos: cada um move o jogador que controla e age (passe/chute).
   for (const team of [0, 1] as const) {

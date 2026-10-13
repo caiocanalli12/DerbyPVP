@@ -8,7 +8,7 @@ import {
   PLAYER_RUN_SPEED,
   SIM_DT,
 } from '../src/config/constants';
-import { createPlayer, formationPosition, integrateMovement } from '../src/sim/player';
+import { clampToField, createPlayer, formationPosition, integrateMovement } from '../src/sim/player';
 import { separatePlayers } from '../src/sim/physics';
 import { createWorld, getPlayer, stepWorld } from '../src/sim/world';
 import type { HumanInputs } from '../src/sim/world';
@@ -109,9 +109,22 @@ describe('movimento', () => {
       expect(p.y).toBeGreaterThanOrEqual(PLAYER_RADIUS - 1e-9);
       expect(p.y).toBeLessThanOrEqual(FIELD_WIDTH - PLAYER_RADIUS + 1e-9);
     }
-    const p1 = getPlayer(w, w.controlled[0]);
-    expect(p1.x).toBeCloseTo(PLAYER_RADIUS, 6);
-    expect(p1.y).toBeCloseTo(PLAYER_RADIUS, 6);
+  });
+
+  it('jogador correndo contra o canto para encostado nas paredes', () => {
+    const p = createPlayer(0, 0, 'ATA');
+    p.x = 3;
+    p.y = 3;
+    p.moveX = -Math.SQRT1_2;
+    p.moveY = -Math.SQRT1_2;
+    for (let i = 0; i < 120; i++) {
+      integrateMovement(p, SIM_DT);
+      clampToField(p);
+    }
+    expect(p.x).toBeCloseTo(PLAYER_RADIUS, 6);
+    expect(p.y).toBeCloseTo(PLAYER_RADIUS, 6);
+    expect(p.vx).toBe(0);
+    expect(p.vy).toBe(0);
   });
 });
 
