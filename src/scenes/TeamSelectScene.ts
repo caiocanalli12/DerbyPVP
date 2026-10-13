@@ -1,5 +1,13 @@
 import Phaser from 'phaser';
-import { BOIL_FPS, GAME_HEIGHT, GAME_WIDTH } from '../config/constants';
+import {
+  BOIL_FPS,
+  GAME_HEIGHT,
+  GAME_WIDTH,
+  PREVIEW_BREATH_AMOUNT,
+  PREVIEW_BREATH_HZ,
+  PREVIEW_SWAY_DEG,
+  PREVIEW_SWAY_HZ,
+} from '../config/constants';
 import { audio } from '../audio/AudioManager';
 import { TEAMS } from '../data/teams';
 import type { TeamId } from '../data/teams';
@@ -11,6 +19,8 @@ import { FilmView, filmEffectsEnabled } from '../render/FilmView';
 import { addSunburst, addTitle, readMenuInput } from '../render/menu';
 
 const COLS = 4;
+/** Escala da prévia do jogador com o uniforme. */
+const PREVIEW_SCALE = 0.86;
 /** Tempo (s) depois que os dois confirmam até seguir para o VS. */
 const BOTH_READY_DELAY = 0.7;
 
@@ -116,7 +126,7 @@ export class TeamSelectScene extends Phaser.Scene {
       .text(cx - 120, 400, '', { fontFamily: FONT_TEXT, fontSize: '17px', color: CREAM_CSS })
       .setOrigin(0.5)
       .setDepth(5);
-    const preview = this.add.image(cx + 130, 410, crestKey('PAL')).setOrigin(0.5, 1).setScale(0.86).setDepth(5);
+    const preview = this.add.image(cx + 130, 410, crestKey('PAL')).setOrigin(0.5, 1).setScale(PREVIEW_SCALE).setDepth(5);
     this.add.ellipse(cx + 130, 404, 110, 22, 0x1a1410, 0.4).setDepth(4);
 
     const grid: Phaser.GameObjects.Image[] = [];
@@ -160,7 +170,7 @@ export class TeamSelectScene extends Phaser.Scene {
       const variant = kits.variants[i]!;
       const kitId = `${team.id}-${variant}`;
       generateKitPreview(this, kitId, kits.kits[i]!, 9);
-      s.preview.setData('kitId', kitId);
+      s.preview.setTexture(previewKey(kitId));
       s.crest.setTexture(crestKey(team.id));
       s.name.setText(team.name.toUpperCase());
       s.kitLabel.setText(variant === 'home' ? 'UNIFORME TITULAR' : 'UNIFORME RESERVA');
@@ -176,7 +186,12 @@ export class TeamSelectScene extends Phaser.Scene {
     const boil = Math.floor(t * BOIL_FPS) % 3;
 
     this.sides.forEach((s, i) => {
-      s.preview.setTexture(previewKey(String(s.preview.getData('kitId')), boil));
+      // Prévia viva, mas calma: respira e balança devagar, presa pelos pés.
+      const breath = Math.sin((t * PREVIEW_BREATH_HZ + i * 0.31) * Math.PI * 2);
+      const sway = Math.sin((t * PREVIEW_SWAY_HZ + i * 0.17) * Math.PI * 2);
+      s.preview
+        .setScale(PREVIEW_SCALE * (1 - breath * PREVIEW_BREATH_AMOUNT * 0.4), PREVIEW_SCALE * (1 + breath * PREVIEW_BREATH_AMOUNT))
+        .setAngle(sway * PREVIEW_SWAY_DEG);
       // Cursor: moldura dourada fervendo em volta do escudo escolhido.
       const img = s.grid[s.index]!;
       const g = s.cursor;

@@ -98,10 +98,13 @@ export class ScoreboardView {
       this.score[1].setText(String(match.score[1]));
     }
     this.clock.setText(match.shootout || match.phase === 'PENALTIS' ? 'PÊN' : `${PERIOD_LABEL[match.period]} ${formatClock(match.clock)}`);
-    // Aviso discreto da saída de bola (contagem curta).
+    // Aviso discreto da saída de bola; depois do apito, lembra que ela sai com um passe para trás.
     if (match.phase === 'SAIDA_DE_BOLA') {
       const blink = Math.floor(timeSec * 4) % 2 === 0;
-      this.kickoff.setText(`SAÍDA DE BOLA · ${match.kickoffTeam === 0 ? 'J1' : 'J2'}`).setVisible(blink || match.phaseTimer < 0.3);
+      const who = match.kickoffTeam === 0 ? 'J1' : 'J2';
+      this.kickoff
+        .setText(match.kickoffLive ? `${who}: MIRE E PASSE PARA TRÁS` : `SAÍDA DE BOLA · ${who}`)
+        .setVisible(match.kickoffLive || blink || match.phaseTimer < 0.3);
     } else {
       this.kickoff.setVisible(false);
     }

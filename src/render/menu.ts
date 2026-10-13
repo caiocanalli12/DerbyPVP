@@ -71,14 +71,18 @@ export function addSunburst(scene: Phaser.Scene, a = 0xe8b04b, b = 0xd3913a): Ph
     makeCanvasTexture(scene, key, S, S, (ctx) => {
       const c = S / 2;
       const n = 28;
-      for (let i = 0; i < n; i++) {
+      // Fundo inteiro numa cor e só os raios da outra por cima: raios lado a lado deixariam uma
+      // fresta semitransparente (do antisserrilhado) entre eles, que aparecia como linha escura.
+      ctx.fillStyle = css(b);
+      ctx.fillRect(0, 0, S, S);
+      ctx.fillStyle = css(a);
+      for (let i = 0; i < n; i += 2) {
         const a0 = (i / n) * Math.PI * 2;
         const a1 = ((i + 1) / n) * Math.PI * 2;
         ctx.beginPath();
         ctx.moveTo(c, c);
         ctx.arc(c, c, S, a0, a1);
         ctx.closePath();
-        ctx.fillStyle = css(i % 2 === 0 ? a : b);
         ctx.fill();
       }
       // Raios do brilho e do escurecimento medidos na tela (60 e 850 px), não na textura.

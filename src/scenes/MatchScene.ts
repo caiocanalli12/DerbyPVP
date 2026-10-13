@@ -27,6 +27,7 @@ import type { TeamId } from '../data/teams';
 import { IndicatorView } from '../render/IndicatorView';
 import { ScoreboardView } from '../render/ScoreboardView';
 import { PowerArcView } from '../render/PowerArcView';
+import { KickoffAimView } from '../render/KickoffAimView';
 import { IntertitleView } from '../render/IntertitleView';
 import { EffectsView } from '../render/EffectsView';
 import { GoalTextView } from '../render/GoalTextView';
@@ -79,6 +80,7 @@ export class MatchScene extends Phaser.Scene {
   private weatherView!: WeatherView;
   private scoreboard!: ScoreboardView;
   private powerArc!: PowerArcView;
+  private kickoffAim!: KickoffAimView;
   private intertitle!: IntertitleView;
   private effects!: EffectsView;
   private goalText!: GoalTextView;
@@ -178,6 +180,7 @@ export class MatchScene extends Phaser.Scene {
     this.indicators = new IndicatorView(this, shirts);
     this.penaltyView = new PenaltyView(this, shirts, this.kits.keeperColors);
     this.powerArc = new PowerArcView(this, shirts);
+    this.kickoffAim = new KickoffAimView(this, shirts);
     this.debug = new DebugOverlay(this);
     this.scoreboard = new ScoreboardView(this, this.config.teams, shirts);
     this.intertitle = new IntertitleView(this);
@@ -207,6 +210,7 @@ export class MatchScene extends Phaser.Scene {
       this.weatherView.destroy();
       this.scoreboard.destroy();
       this.powerArc.destroy();
+      this.kickoffAim.destroy();
       this.intertitle.destroy();
       this.effects.destroy();
       this.goalText.destroy();
@@ -257,6 +261,7 @@ export class MatchScene extends Phaser.Scene {
     this.indicators.update(world, alpha, now, showIndicators);
     this.penaltyView.update(this.match, now);
     this.powerArc.update(this.match, alpha, now);
+    this.kickoffAim.update(this.match, now);
     this.scoreboard.update(this.match, now);
     this.intertitle.update(this.match.intertitle, now);
     this.effects.update(this.match, alpha, now, renderDt);

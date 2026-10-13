@@ -5,9 +5,11 @@ import {
   HALF_DURATION,
   INTERTITLE_DURATION,
   KICKOFF_DELAY,
+  KICKOFF_PASS_DEADLINE,
   SIM_DT,
 } from '../src/config/constants';
 import { emptyPlayerInput } from '../src/core/input';
+import type { PlayerInput } from '../src/core/input';
 import { placeBall } from '../src/sim/ball';
 import { createMatch, formatClock, stepMatch, teamAttacking } from '../src/sim/match';
 import type { Match } from '../src/sim/match';
@@ -46,8 +48,22 @@ function scoreIn(m: Match, side: 0 | 1, lastTouchTeam: 0 | 1): void {
   w.aiEnabled = true;
 }
 
+/** Entrada de um humano: direção e, opcionalmente, um toque no passe ou no chute. */
+function aim(x: number, y: number, button: 'pass' | 'shoot' | null = null): PlayerInput {
+  const i: PlayerInput = { ...emptyPlayerInput(), moveX: x, moveY: y };
+  const tap = { down: false, pressed: true, released: true };
+  if (button === 'pass') i.pass = tap;
+  if (button === 'shoot') i.shoot = tap;
+  return i;
+}
+
+/** Espera o apito da saída e dá o passe (para trás) com o time que sai. */
 function startPlaying(m: Match): void {
-  runUntil(m, (mm) => mm.phase === 'JOGANDO', 5);
+  runUntil(m, (mm) => mm.kickoffLive, 5);
+  const inputs: HumanInputs = [emptyPlayerInput(), emptyPlayerInput()];
+  inputs[m.kickoffTeam] = withButtons(emptyPlayerInput(), 'tap');
+  stepMatch(m, inputs, SIM_DT);
+  expect(m.phase).toBe('JOGANDO');
 }
 
 describe('saída de bola', () => {
@@ -67,20 +83,93 @@ describe('saída de bola', () => {
     expect(Math.hypot(rival.x - 20, rival.y - 10)).toBeGreaterThan(3);
   });
 
-  it('libera depois de 1 s; ninguém se mexe antes', () => {
+  it('apita depois de 1 s; ninguém se mexe antes', () => {
     const m = createMatch();
     const p = getPlayer(m.world, playerId(0, 'ATA'));
     const x0 = p.x;
-    const push: HumanInputs = [
-      { ...emptyPlayerInput(), moveX: 1 },
-      { ...emptyPlayerInput(), moveX: -1 },
-    ];
+    const push: HumanInputs = [aim(1, 0), aim(-1, 0)];
     run(m, KICKOFF_DELAY - 0.05, push);
-    expect(m.phase).toBe('SAIDA_DE_BOLA');
+    expect(m.kickoffLive).toBe(false);
     expect(p.x).toBe(x0);
     run(m, 0.1, push);
-    expect(m.phase).toBe('JOGANDO');
+    expect(m.kickoffLive).toBe(true);
     expect(m.events.some((e) => e.type === 'whistle')).toBe(true);
+  });
+
+  it('depois do apito o batedor não sai andando com a bola: só gira em volta dela', () => {
+    const m = createMatch();
+    const p = getPlayer(m.world, playerId(0, 'ATA'));
+    const rival = getPlayer(m.world, playerId(1, 'ATA'));
+    const r0 = { x: rival.x, y: rival.y };
+    run(m, KICKOFF_DELAY + 2, [aim(1, 0.3), aim(-1, 0)]);
+    expect(m.phase).toBe('SAIDA_DE_BOLA');
+    expect(m.world.ball.owner).toBe(p.id);
+    expect(m.world.ball.x).toBeCloseTo(20, 6);
+    expect(m.world.ball.y).toBeCloseTo(10, 6);
+    expect(Math.hypot(p.x - 20, p.y - 10)).toBeCloseTo(0.45, 2);
+    expect({ x: rival.x, y: rival.y }).toEqual(r0);
+    expect(m.clock).toBe(0);
+  });
+
+  it('a mira fica no próprio campo: nunca aponta para o gol adversário', () => {
+    const m = createMatch();
+    // O J1 defende a esquerda: mirar no próprio campo é ter componente x <= 0.
+    for (const [x, y] of [[1, 0], [1, 1], [1, -1], [0, 1], [-1, 1], [0, -1], [1, 0]] as const) {
+      run(m, 0.5, [aim(x, y), emptyPlayerInput()]);
+      expect(Math.cos(m.kickoffAim)).toBeLessThanOrEqual(1e-9);
+    }
+    // Para cima e para trás: mira entre o gol e a lateral de cima.
+    run(m, 0.5, [aim(-1, -1), emptyPlayerInput()]);
+    expect(Math.cos(m.kickoffAim)).toBeLessThan(-0.5);
+    expect(Math.sin(m.kickoffAim)).toBeLessThan(-0.5);
+  });
+
+  it('o passe vai para um companheiro no próprio campo e põe a bola em jogo', () => {
+    const m = createMatch();
+    run(m, KICKOFF_DELAY + 0.5, [aim(-1, -1), emptyPlayerInput()]);
+    stepMatch(m, [aim(-1, -1, 'pass'), emptyPlayerInput()], SIM_DT);
+    expect(m.phase).toBe('JOGANDO');
+    const receiver = getPlayer(m.world, playerId(0, 'ALA_E'));
+    expect(m.world.passLock?.receiver).toBe(receiver.id);
+    expect(m.world.controlled[0]).toBe(receiver.id);
+    expect(m.world.ball.owner).toBeNull();
+    expect(m.world.ball.vx).toBeLessThan(0);
+    expect(receiver.x).toBeLessThan(20);
+    // Depois disso o jogo corre normalmente (relógio andando).
+    run(m, 1);
+    expect(m.clock).toBeGreaterThan(0.9);
+  });
+
+  it('o chute não tira a bola na saída', () => {
+    const m = createMatch();
+    run(m, KICKOFF_DELAY + 0.2);
+    stepMatch(m, [aim(-1, 0, 'shoot'), emptyPlayerInput()], SIM_DT);
+    run(m, 0.3);
+    expect(m.phase).toBe('SAIDA_DE_BOLA');
+    expect(m.world.ball.owner).toBe(playerId(0, 'ATA'));
+  });
+
+  it('se ninguém passar, a bola sai sozinha para trás depois do prazo', () => {
+    const m = createMatch();
+    run(m, KICKOFF_DELAY + KICKOFF_PASS_DEADLINE - 0.1);
+    expect(m.phase).toBe('SAIDA_DE_BOLA');
+    run(m, 0.2);
+    expect(m.phase).toBe('JOGANDO');
+    const pass = m.world.events.find((e) => e.type === 'pass');
+    expect(pass && pass.type === 'pass' && pass.target !== null).toBe(true);
+    expect(m.world.ball.vx).toBeLessThan(0);
+  });
+
+  it('o J2 também passa só para o próprio campo (a direita no 1º tempo)', () => {
+    const m = createMatch();
+    startPlaying(m);
+    scoreIn(m, 1, 0);
+    runUntil(m, (mm) => mm.phase === 'SAIDA_DE_BOLA', 5);
+    run(m, KICKOFF_DELAY + 0.5, [emptyPlayerInput(), aim(-1, 0)]);
+    expect(Math.cos(m.kickoffAim)).toBeGreaterThanOrEqual(-1e-9);
+    stepMatch(m, [emptyPlayerInput(), aim(-1, 0, 'pass')], SIM_DT);
+    expect(m.phase).toBe('JOGANDO');
+    expect(m.world.ball.vx).toBeGreaterThan(0);
   });
 });
 

@@ -226,6 +226,17 @@ export const GOAL_CELEBRATION_DURATION = 3;
 export const GOAL_CELEBRATION_SKIP_AFTER = 1;
 /** Distância do centro em que o atacante do time que não sai fica na saída de bola. */
 export const KICKOFF_DEFENDER_DISTANCE = 3.6;
+/**
+ * Depois do apito, o batedor não sai andando: gira em volta da bola mirando e passa para um
+ * companheiro, só na direção do próprio campo (até este ângulo, em graus, da direção do próprio gol).
+ */
+export const KICKOFF_AIM_MAX_DEG = 90;
+/** Prazo (s, depois do apito) para o passe da saída; estourando, ele sai para onde está mirando. */
+export const KICKOFF_PASS_DEADLINE = 5;
+/** Seta da mira da saída: começa e termina a esta distância da bola (m); pisca nos últimos s do prazo. */
+export const KICKOFF_AIM_ARROW_FROM = 0.35;
+export const KICKOFF_AIM_ARROW_TO = 2.8;
+export const KICKOFF_AIM_WARN_TIME = 1.5;
 
 // ---------------------------------------------------------------------------
 // Troca automática de controle
@@ -237,6 +248,19 @@ export const CONTROL_PREDICT_TIME = 0.3;
 export const CONTROL_SWITCH_MARGIN = 1;
 /** Intervalo mínimo entre trocas automáticas (s). */
 export const CONTROL_SWITCH_COOLDOWN = 0.25;
+/**
+ * Quem está a esta distância da bola (m), de pé ou deslizando, não perde o controle pela regra de
+ * distância: com dois companheiros perto da bola, o controle fica com quem já está nela.
+ */
+export const CONTROL_ENGAGE_DIST = 2;
+/** Depois de uma troca, a regra de distância não volta para o jogador anterior antes disto (s). */
+export const CONTROL_SWITCH_BACK_TIME = 1.5;
+/**
+ * Logo depois de uma troca, o novo candidato precisa estar bem mais perto: a margem começa com
+ * este extra (m) e cai até CONTROL_SWITCH_MARGIN neste tempo (s).
+ */
+export const CONTROL_RECENT_EXTRA_MARGIN = 2;
+export const CONTROL_RECENT_TIME = 1.5;
 
 // ---------------------------------------------------------------------------
 // Indicador do jogador controlado
@@ -305,6 +329,13 @@ export const AI_DEFENSE_DROP = 3;
 export const AI_DEFENSE_SQUEEZE = 0.4;
 /** Distância (m) do marcador ao portador, entre ele e o próprio gol. */
 export const AI_MARK_DISTANCE = 2;
+/**
+ * Se o jogador do humano já pressiona o portador (a esta distância dele, m), o marcador da IA faz a
+ * cobertura mais atrás (a esta distância do portador, m): os dois no mesmo lugar disputariam o
+ * controle, que ficaria trocando de um para o outro.
+ */
+export const AI_PRESS_HANDOFF_DIST = 3;
+export const AI_COVER_DISTANCE = 4.5;
 /** Velocidade com que o alvo da IA se move (1/s; suaviza mudanças de posição). */
 export const AI_TARGET_SMOOTHING = 4;
 /** Raio de chegada (m): perto do alvo a IA desacelera; abaixo da zona morta, para. */
@@ -562,6 +593,15 @@ export const ART_STEP_FRAME_SHARE = 0.5;
 export const ART_STEP_MAX_BUDGET_MS = 100;
 /** Quadros de animação de jogador desenhados (e rasterizados) por passo da geração. */
 export const ART_CELLS_PER_STEP = 3;
+
+/**
+ * Prévia do jogador na seleção de times: respiração (Hz e fração da altura) e balanço (Hz e graus),
+ * lentos e pequenos, para ele parecer vivo sem tremer.
+ */
+export const PREVIEW_BREATH_HZ = 0.4;
+export const PREVIEW_BREATH_AMOUNT = 0.014;
+export const PREVIEW_SWAY_HZ = 0.22;
+export const PREVIEW_SWAY_DEG = 1.2;
 
 /** Resolução do fundo de raios dos menus em relação à tela (é ampliado ao desenhar). */
 export const MENU_SUNBURST_RES = 0.6;

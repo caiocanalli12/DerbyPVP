@@ -16,7 +16,9 @@ import {
   AI_DEAD_ZONE,
   AI_DEFENSE_DROP,
   AI_DEFENSE_SQUEEZE,
+  AI_COVER_DISTANCE,
   AI_MARK_DISTANCE,
+  AI_PRESS_HANDOFF_DIST,
   AI_SPEED_FACTOR,
   AI_TARGET_SMOOTHING,
   AI_ZONES,
@@ -110,12 +112,16 @@ export function aiTarget(world: World, p: Player, marker: number | null): { x: n
   } else if (owner && owner.team !== team) {
     const carrier = opponentCarrier(world, team);
     if (carrier && marker === p.id) {
-      // Marca: entre o portador e o próprio gol, a ~2 m dele.
+      // Marca: entre o portador e o próprio gol, a ~2 m dele. Se o jogador do humano já está
+      // pressionando, faz a cobertura mais atrás (no mesmo lugar, os dois disputariam o controle).
+      const ctl = world.players[world.controlled[team]];
+      const pressing =
+        ctl !== undefined && ctl.state === 'normal' && Math.hypot(ctl.x - carrier.x, ctl.y - carrier.y) <= AI_PRESS_HANDOFF_DIST;
       const g = goalCenter(world.defends[team]);
       const dx = g.x - carrier.x;
       const dy = g.y - carrier.y;
       const d = Math.hypot(dx, dy) || 1;
-      const k = Math.min(AI_MARK_DISTANCE, Math.max(0, d - PLAYER_RADIUS));
+      const k = Math.min(pressing ? AI_COVER_DISTANCE : AI_MARK_DISTANCE, Math.max(0, d - PLAYER_RADIUS));
       const tx = carrier.x + (dx / d) * k;
       const ty = carrier.y + (dy / d) * k;
       const t = toAttackFrame(world, team, tx, ty);

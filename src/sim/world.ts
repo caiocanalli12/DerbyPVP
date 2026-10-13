@@ -62,6 +62,8 @@ export interface World {
   controlled: [number, number];
   /** Tempo (s) desde a última troca de controle de cada humano. */
   controlSwitchTimer: [number, number];
+  /** Quem cada humano controlava antes da última troca (ou null). */
+  controlPrev: [number | null, number | null];
   humans: [HumanState, HumanState];
   /** Passe em andamento: o receptor fica com o controle até a bola chegar. */
   passLock: PassLock | null;
@@ -93,6 +95,7 @@ export function createWorld(seed = 1): World {
     defends: [0, 1],
     controlled: [playerId(0, 'ATA'), playerId(1, 'ATA')],
     controlSwitchTimer: [0, 0],
+    controlPrev: [null, null],
     humans: [createHumanState(), createHumanState()],
     passLock: null,
     ballInHands: false,

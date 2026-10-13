@@ -20,13 +20,17 @@ import {
   GOAL_CELEBRATION_SKIP_AFTER,
   HALF_DURATION,
   INTERTITLE_DURATION,
+  KICKOFF_AIM_MAX_DEG,
   KICKOFF_DEFENDER_DISTANCE,
   KICKOFF_DELAY,
+  KICKOFF_PASS_DEADLINE,
+  PLAYER_TURN_RATE,
 } from '../config/constants';
 import { emptyPlayerInput } from '../core/input';
+import type { PlayerInput } from '../core/input';
 import { FIELD_CENTER_X, FIELD_CENTER_Y } from './field';
 import type { GoalSide } from './field';
-import type { TeamIndex } from './player';
+import type { Player, TeamIndex } from './player';
 import {
   attackDir,
   createWorld,
@@ -38,7 +42,9 @@ import {
   stepWorld,
 } from './world';
 import type { HumanInputs, World } from './world';
-import { cancelCharge } from './control';
+import { cancelCharge, passTo } from './control';
+import { choosePassTarget } from './kick';
+import { angleDiff, clamp } from './vec';
 import { placeBall } from './ball';
 import { placeBallInHands } from './goalkeeper';
 import {
@@ -94,6 +100,10 @@ export interface Match {
   goals: GoalRecord[];
   /** Time que dá a saída de bola atual/próxima. */
   kickoffTeam: TeamIndex;
+  /** Saída de bola: já apitou e o batedor pode passar. */
+  kickoffLive: boolean;
+  /** Direção (rad) em que o batedor mira o passe da saída. */
+  kickoffAim: number;
   /** Texto do cartão de intertítulo em exibição (ou null). */
   intertitle: string | null;
   /** Próximo período depois do cartão de INTERVALO/PRORROGACAO. */
@@ -128,6 +138,8 @@ export function createMatch(seed = 1): Match {
     score: [0, 0],
     goals: [],
     kickoffTeam: 0,
+    kickoffLive: false,
+    kickoffAim: Math.PI,
     intertitle: null,
     nextPeriod: null,
     over: false,
@@ -159,22 +171,22 @@ export function teamAttacking(world: World, side: GoalSide): TeamIndex {
 
 /**
  * Prepara a saída de bola: todos na formação, bola no centro com o atacante do time
- * `team`, e o atacante adversário fora do círculo central.
+ * `team` (mirando o próprio campo), e o atacante adversário fora do círculo central.
  */
 export function setupKickoff(match: Match, team: TeamIndex): void {
   const world = match.world;
   resetToFormation(world);
   match.kickoffTeam = team;
+  match.kickoffLive = false;
   match.phase = 'SAIDA_DE_BOLA';
   match.phaseTimer = 0;
 
   const kicker = getPlayer(world, playerId(team, 'ATA'));
   const dir = attackDir(world, team);
-  kicker.x = FIELD_CENTER_X - dir * DRIBBLE_OFFSET;
-  kicker.y = FIELD_CENTER_Y;
+  match.kickoffAim = ownGoalDirection(world, team);
+  placeKickoffTaker(kicker, match.kickoffAim);
   kicker.prevX = kicker.x;
   kicker.prevY = kicker.y;
-  kicker.facing = dir === 1 ? 0 : Math.PI;
 
   const other: TeamIndex = team === 0 ? 1 : 0;
   const rival = getPlayer(world, playerId(other, 'ATA'));
@@ -185,12 +197,78 @@ export function setupKickoff(match: Match, team: TeamIndex): void {
 
   world.controlled = [playerId(0, 'ATA'), playerId(1, 'ATA')];
   world.controlSwitchTimer = [0, 0];
+  world.controlPrev = [null, null];
   givePossession(world, kicker);
   // A posse inicial não é um "evento de jogo".
   world.events = world.events.filter((e) => e.type !== 'possession');
-  // Bola parada exatamente à frente do batedor.
-  world.ball.prevX = world.ball.x = kicker.x + Math.cos(kicker.facing) * DRIBBLE_OFFSET;
-  world.ball.prevY = world.ball.y = kicker.y;
+  // Bola parada no centro, à frente do batedor.
+  world.ball.prevX = world.ball.x = FIELD_CENTER_X;
+  world.ball.prevY = world.ball.y = FIELD_CENTER_Y;
+}
+
+/** Direção (rad) do centro para o gol que o time defende. */
+function ownGoalDirection(world: World, team: TeamIndex): number {
+  return attackDir(world, team) === 1 ? Math.PI : 0;
+}
+
+/** O batedor fica atrás da bola (no centro), virado para onde mira. */
+function placeKickoffTaker(kicker: Player, aim: number): void {
+  kicker.x = FIELD_CENTER_X - Math.cos(aim) * DRIBBLE_OFFSET;
+  kicker.y = FIELD_CENTER_Y - Math.sin(aim) * DRIBBLE_OFFSET;
+  kicker.facing = aim;
+}
+
+/**
+ * Para quem vai o passe da saída mirando `aim`: o companheiro de linha no cone do passe ou, se não
+ * houver, o mais próximo dessa direção. Nunca o goleiro.
+ */
+export function kickoffTarget(world: World, kicker: Player, aim: number): Player {
+  const mates = world.players.filter((p) => p.team === kicker.team && p.role !== 'GK' && p.id !== kicker.id);
+  const ux = Math.cos(aim);
+  const uy = Math.sin(aim);
+  const inCone = choosePassTarget(kicker, mates, ux, uy);
+  if (inCone) return inCone;
+  let best = mates[0]!;
+  let bestCos = -Infinity;
+  for (const m of mates) {
+    const d = Math.hypot(m.x - kicker.x, m.y - kicker.y) || 1;
+    const cos = ((m.x - kicker.x) * ux + (m.y - kicker.y) * uy) / d;
+    if (cos > bestCos) {
+      bestCos = cos;
+      best = m;
+    }
+  }
+  return best;
+}
+
+/**
+ * Saída de bola depois do apito: ninguém se mexe; o batedor gira em volta da bola com o direcional,
+ * mirando só o próprio campo, e o passe (ou o prazo) põe a bola em jogo.
+ */
+function stepKickoff(match: Match, input: PlayerInput, dt: number): void {
+  const world = match.world;
+  const team = match.kickoffTeam;
+  const kicker = getPlayer(world, playerId(team, 'ATA'));
+  // Ângulos medidos a partir da direção do próprio gol, para nunca girar passando pela frente.
+  const back = ownGoalDirection(world, team);
+  const max = (KICKOFF_AIM_MAX_DEG * Math.PI) / 180;
+  const rel = angleDiff(back, match.kickoffAim);
+  if (input.moveX !== 0 || input.moveY !== 0) {
+    let want = angleDiff(back, Math.atan2(input.moveY, input.moveX));
+    // Direcional para a frente: fica no limite do lado em que já está.
+    if (Math.abs(want) > max) want = (Math.abs(want) > Math.PI - 1e-6 ? Math.sign(rel) || 1 : Math.sign(want)) * max;
+    const step = PLAYER_TURN_RATE * dt;
+    match.kickoffAim = back + clamp(rel + clamp(want - rel, -step, step), -max, max);
+  }
+  placeKickoffTaker(kicker, match.kickoffAim);
+
+  const late = match.phaseTimer >= KICKOFF_DELAY + KICKOFF_PASS_DEADLINE;
+  if (input.pass.pressed || late) {
+    passTo(world, kicker, kickoffTarget(world, kicker, match.kickoffAim));
+    match.kickoffLive = false;
+    match.phase = 'JOGANDO';
+    match.phaseTimer = 0;
+  }
 }
 
 /** Congela o mundo (sem movimento): mantém o desenho estável durante pausas de regra. */
@@ -294,11 +372,12 @@ export function stepMatch(match: Match, inputs: HumanInputs, dt: number): void {
   switch (match.phase) {
     case 'SAIDA_DE_BOLA':
       freezeWorld(world);
-      if (match.phaseTimer >= KICKOFF_DELAY) {
-        match.phase = 'JOGANDO';
-        match.phaseTimer = 0;
+      if (match.phaseTimer < KICKOFF_DELAY) break;
+      if (!match.kickoffLive) {
+        match.kickoffLive = true;
         match.events.push({ type: 'whistle' });
       }
+      stepKickoff(match, inputs[match.kickoffTeam], dt);
       break;
 
     case 'JOGANDO': {

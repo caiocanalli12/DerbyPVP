@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { CONTROL_SWITCH_COOLDOWN, SIM_DT } from '../src/config/constants';
+import { CONTROL_SWITCH_BACK_TIME, CONTROL_SWITCH_COOLDOWN, SIM_DT } from '../src/config/constants';
 import { placeBall } from '../src/sim/ball';
 import { setControlled, updateAutoControl } from '../src/sim/control';
-import { createWorld, getPlayer, givePossession, playerId } from '../src/sim/world';
+import { createWorld, getPlayer, givePossession, playerId, stepWorld } from '../src/sim/world';
+import type { PlayerInput } from '../src/core/input';
 import type { World } from '../src/sim/world';
 import { clearPlayers, idle, move, steps, withButtons } from './helpers/sim';
 
@@ -156,5 +157,51 @@ describe('não fica piscando', () => {
     }
     // De um extremo ao outro há no máximo uma troca por "fronteira" entre jogadores.
     expect(switches).toBeLessThanOrEqual(3);
+  });
+});
+
+describe('adversário conduzindo com dois defensores perto', () => {
+  /**
+   * O J2 conduz para o gol do J1 com zigue-zague; o FIXO e o ALA_E do J1 estão colados nele.
+   * `j1` decide o que o J1 aperta a cada passo. Devolve as trocas [tempo, de, para] de controle.
+   */
+  function play(seed: number, j1: (w: World) => PlayerInput): [number, number, number][] {
+    const w = createWorld(seed);
+    const carrier = getPlayer(w, playerId(1, 'ATA'));
+    carrier.x = 24;
+    carrier.y = 10;
+    carrier.facing = Math.PI;
+    givePossession(w, carrier);
+    put(w, playerId(0, 'FIXO'), 21, 9.5);
+    put(w, playerId(0, 'ALA_E'), 22.5, 11.5);
+    w.controlled[0] = playerId(0, 'ALA_E');
+    const out: [number, number, number][] = [];
+    for (let i = 0; i < 5 / SIM_DT && w.ball.owner === carrier.id; i++) {
+      const before = w.controlled[0];
+      stepWorld(w, [j1(w), move(-1, Math.sin(i * SIM_DT * (1 + (seed % 5))) * 0.8)], SIM_DT);
+      if (w.controlled[0] !== before) out.push([w.time, before, w.controlled[0]]);
+    }
+    return out;
+  }
+
+  const chase = (w: World): PlayerInput => {
+    const me = getPlayer(w, w.controlled[0]);
+    return move(w.ball.x - me.x, w.ball.y - me.y);
+  };
+
+  it('quem persegue a bola não perde o controle para o companheiro ao lado', () => {
+    for (let seed = 1; seed <= 12; seed++) expect(play(seed, chase)).toEqual([]);
+  });
+
+  it('com o J1 parado o controle acompanha a jogada, mas nunca volta logo para o anterior', () => {
+    for (let seed = 1; seed <= 12; seed++) {
+      const sw = play(seed, () => idle());
+      for (let k = 1; k < sw.length; k++) {
+        const [t, from, to] = sw[k]!;
+        const [tPrev, fromPrev] = sw[k - 1]!;
+        if (to === fromPrev) expect(t - tPrev).toBeGreaterThanOrEqual(CONTROL_SWITCH_BACK_TIME - 1e-9);
+        expect(from).toBe(sw[k - 1]![2]);
+      }
+    }
   });
 });

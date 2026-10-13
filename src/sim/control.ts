@@ -3,7 +3,11 @@
  * controlado (passe, carga e chute).
  */
 import {
+  CONTROL_ENGAGE_DIST,
   CONTROL_PREDICT_TIME,
+  CONTROL_RECENT_EXTRA_MARGIN,
+  CONTROL_RECENT_TIME,
+  CONTROL_SWITCH_BACK_TIME,
   CONTROL_SWITCH_COOLDOWN,
   CONTROL_SWITCH_MARGIN,
   PASS_NO_TARGET_SPEED,
@@ -38,6 +42,7 @@ export function setControlled(world: World, team: TeamIndex, playerId: number): 
   if (world.controlled[team] === playerId) return;
   const p = getPlayer(world, playerId);
   if (p.team !== team || p.role === 'GK') return;
+  world.controlPrev[team] = world.controlled[team];
   world.controlled[team] = playerId;
   world.controlSwitchTimer[team] = 0;
   cancelCharge(world.humans[team]);
@@ -55,6 +60,9 @@ export function predictedBall(world: World): { x: number; y: number } {
  * - passe em andamento para um companheiro: o receptor (já trocado na hora do passe);
  * - senão: o jogador de linha mais perto da bola prevista, com histerese
  *   (CONTROL_SWITCH_MARGIN m mais perto e no máximo uma troca a cada CONTROL_SWITCH_COOLDOWN s).
+ *   Para não ficar trocando entre dois jogadores perto da bola: quem já está nela (a até
+ *   CONTROL_ENGAGE_DIST m, de pé) continua controlado, logo depois de uma troca a margem é maior
+ *   (CONTROL_RECENT_*) e a troca não volta para o jogador anterior antes de CONTROL_SWITCH_BACK_TIME s.
  */
 export function updateAutoControl(world: World, team: TeamIndex, dt: number): void {
   world.controlSwitchTimer[team] += dt;
@@ -73,8 +81,14 @@ export function updateAutoControl(world: World, team: TeamIndex, dt: number): vo
 
   if (world.controlSwitchTimer[team] < CONTROL_SWITCH_COOLDOWN) return;
 
-  const target = predictedBall(world);
   const current = getPlayer(world, world.controlled[team]);
+  const ball = world.ball;
+  const onTheBall =
+    (current.state === 'normal' || current.state === 'tackling') &&
+    Math.hypot(current.x - ball.x, current.y - ball.y) <= CONTROL_ENGAGE_DIST;
+  if (onTheBall) return;
+
+  const target = predictedBall(world);
   const curDist = Math.hypot(current.x - target.x, current.y - target.y);
   let best: Player | null = null;
   let bestDist = Infinity;
@@ -86,9 +100,11 @@ export function updateAutoControl(world: World, team: TeamIndex, dt: number): vo
       best = p;
     }
   }
-  if (best && best.id !== current.id && bestDist + CONTROL_SWITCH_MARGIN <= curDist) {
-    setControlled(world, team, best.id);
-  }
+  const since = world.controlSwitchTimer[team];
+  const margin = CONTROL_SWITCH_MARGIN + CONTROL_RECENT_EXTRA_MARGIN * Math.max(0, 1 - since / CONTROL_RECENT_TIME);
+  if (!best || best.id === current.id || bestDist + margin > curDist) return;
+  const backTooSoon = best.id === world.controlPrev[team] && since < CONTROL_SWITCH_BACK_TIME;
+  if (!backTooSoon) setControlled(world, team, best.id);
 }
 
 /** Direção de ação: o direcional, ou para onde o jogador está virado. */
@@ -97,21 +113,26 @@ function actionDirection(p: Player, input: PlayerInput): { x: number; y: number 
   return { x: Math.cos(p.facing), y: Math.sin(p.facing) };
 }
 
+/** Passe rasteiro de `p` para `target` (à frente dele, se estiver correndo); o controle vai para ele. */
+export function passTo(world: World, p: Player, target: Player): void {
+  const plan = planPass(world.ball, target);
+  releaseBall(world.ball, p, { x: plan.vx, y: plan.vy, z: 0 });
+  world.passLock = { team: p.team, receiver: target.id, until: world.time + plan.eta + PASS_RECEIVER_LOCK_EXTRA };
+  setControlled(world, p.team, target.id);
+  world.events.push({ type: 'pass', player: p.id, target: target.id });
+}
+
 /** Executa um passe do jogador `p` na direção dada. */
 export function performPass(world: World, p: Player, dirX: number, dirY: number): void {
-  const ball = world.ball;
   const mates = world.players.filter((m) => m.team === p.team);
   const target = choosePassTarget(p, mates, dirX, dirY);
   if (target) {
-    const plan = planPass(ball, target);
-    releaseBall(ball, p, { x: plan.vx, y: plan.vy, z: 0 });
-    world.passLock = { team: p.team, receiver: target.id, until: world.time + plan.eta + PASS_RECEIVER_LOCK_EXTRA };
-    setControlled(world, p.team, target.id);
-  } else {
-    const l = Math.hypot(dirX, dirY) || 1;
-    releaseBall(ball, p, { x: (dirX / l) * PASS_NO_TARGET_SPEED, y: (dirY / l) * PASS_NO_TARGET_SPEED, z: 0 });
+    passTo(world, p, target);
+    return;
   }
-  world.events.push({ type: 'pass', player: p.id, target: target ? target.id : null });
+  const l = Math.hypot(dirX, dirY) || 1;
+  releaseBall(world.ball, p, { x: (dirX / l) * PASS_NO_TARGET_SPEED, y: (dirY / l) * PASS_NO_TARGET_SPEED, z: 0 });
+  world.events.push({ type: 'pass', player: p.id, target: null });
 }
 
 /** Executa um chute do jogador `p` com a carga dada. */
