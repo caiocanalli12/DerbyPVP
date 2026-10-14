@@ -359,6 +359,48 @@ export class ConfirmDialog {
   }
 }
 
+/** Aviso por cima da tela, com um botão só (confirmar ou voltar fecham). */
+export class NoticeDialog {
+  private readonly objects: Phaser.GameObjects.GameObject[] = [];
+  private readonly list: ButtonList;
+
+  constructor(scene: Phaser.Scene, title: string, detail: string, button: string, depth = 40) {
+    const cx = GAME_WIDTH / 2;
+    const cy = GAME_HEIGHT / 2;
+    this.objects.push(scene.add.rectangle(cx, cy, GAME_WIDTH, GAME_HEIGHT, 0x0d0907, 0.6).setDepth(depth));
+    const g = scene.add.graphics().setDepth(depth + 1);
+    const x = cx - CONFIRM_W / 2;
+    const y = cy - CONFIRM_H / 2;
+    g.fillStyle(0x1a1410, 0.97);
+    g.fillRoundedRect(x, y, CONFIRM_W, CONFIRM_H - 60, 16);
+    g.lineStyle(4, CREAM, 1);
+    g.strokeRoundedRect(x + 10, y + 10, CONFIRM_W - 20, CONFIRM_H - 80, 11);
+    this.objects.push(g);
+    this.objects.push(addTitle(scene, cx, y + 62, title, 36).setDepth(depth + 2));
+    this.objects.push(
+      scene.add
+        .text(cx, y + 112, detail, { fontFamily: FONT_TEXT, fontSize: '20px', color: CREAM_CSS, align: 'center', wordWrap: { width: CONFIRM_W - 80 } })
+        .setOrigin(0.5)
+        .setDepth(depth + 2),
+    );
+    this.list = new ButtonList(scene, cx, y + 178, [button], 62, depth + 2);
+  }
+
+  /** Fechou (confirmou ou voltou)? */
+  handle(input: MenuInput): boolean {
+    return input.players.some((p) => p.back) || this.list.handle(input) !== null;
+  }
+
+  update(timeSec: number): void {
+    this.list.update(timeSec);
+  }
+
+  destroy(): void {
+    this.list.destroy();
+    for (const o of this.objects) o.destroy();
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Estrelas do nível do adversário
 // ---------------------------------------------------------------------------
@@ -394,4 +436,54 @@ export function drawLevelStars(g: Phaser.GameObjects.Graphics, x: number, y: num
     }
   }
   return gap * (total - 1) + r * 2;
+}
+
+// ---------------------------------------------------------------------------
+// Antena de rádio (esperando a conexão)
+// ---------------------------------------------------------------------------
+
+/**
+ * Antena art déco transmitindo: torre em treliça com uma bola no topo e ondas saindo dos dois
+ * lados, que crescem e somem. `t` em segundos; `(x, y)` = topo da antena.
+ */
+export function drawRadioWaves(g: Phaser.GameObjects.Graphics, x: number, y: number, t: number, color = CREAM): void {
+  // Torre.
+  const h = 120;
+  g.lineStyle(7, 0x1a1410, 1);
+  g.lineBetween(x, y, x - 34, y + h);
+  g.lineBetween(x, y, x + 34, y + h);
+  g.lineStyle(4, color, 1);
+  g.lineBetween(x, y, x - 34, y + h);
+  g.lineBetween(x, y, x + 34, y + h);
+  for (let i = 1; i <= 4; i++) {
+    const yy = y + (h * i) / 5;
+    const w = (34 * i) / 5;
+    g.lineStyle(3, color, 0.9);
+    g.lineBetween(x - w, yy, x + w, yy);
+    if (i < 4) {
+      const w2 = (34 * (i + 1)) / 5;
+      g.lineBetween(x - w, yy, x + w2, y + (h * (i + 1)) / 5);
+    }
+  }
+  g.fillStyle(0x1a1410, 1);
+  g.fillCircle(x, y, 11);
+  g.fillStyle(0xffd24a, 1);
+  g.fillCircle(x, y, 7);
+  // Ondas: três arcos de cada lado, nascendo perto da bola e se afastando.
+  for (let k = 0; k < 3; k++) {
+    const phase = (t * 0.8 + k / 3) % 1;
+    const r = 20 + phase * 70;
+    const alpha = 1 - phase;
+    for (const s of [-1, 1]) {
+      const a0 = s < 0 ? Math.PI - 0.6 : -0.6;
+      g.lineStyle(5, 0x1a1410, alpha * 0.8);
+      g.beginPath();
+      g.arc(x, y, r, a0, a0 + 1.2, false);
+      g.strokePath();
+      g.lineStyle(3, color, alpha);
+      g.beginPath();
+      g.arc(x, y, r, a0, a0 + 1.2, false);
+      g.strokePath();
+    }
+  }
 }

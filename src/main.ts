@@ -16,6 +16,9 @@ import { ResultScene } from './scenes/ResultScene';
 import { SoloSetupScene } from './scenes/SoloSetupScene';
 import { BracketScene } from './scenes/BracketScene';
 import { ChampionScene } from './scenes/ChampionScene';
+import { OnlineMenuScene } from './scenes/OnlineMenuScene';
+import { OnlineLobbyScene } from './scenes/OnlineLobbyScene';
+import { OnlineSelectScene } from './scenes/OnlineSelectScene';
 import { OverlayScene } from './scenes/OverlayScene';
 import { keyboard } from './core/input';
 import { audio } from './audio/AudioManager';
@@ -71,6 +74,9 @@ async function start(): Promise<void> {
       TeamSelectScene,
       SoloSetupScene,
       BracketScene,
+      OnlineMenuScene,
+      OnlineLobbyScene,
+      OnlineSelectScene,
       VersusScene,
       MatchScene,
       PauseScene,

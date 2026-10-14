@@ -882,3 +882,18 @@ export const BRACKET_REVEAL_STEP = 0.55;
 /** Cartão "ELIMINADO": tempo mínimo (s) antes de poder pular e tempo até sair sozinho. */
 export const ELIMINATED_CARD_MIN = 0.8;
 export const ELIMINATED_CARD_TIME = 2.6;
+
+// ---------------------------------------------------------------------------
+// Online
+// ---------------------------------------------------------------------------
+
+/** Prazos (s): registrar a sala no servidor, conectar ao anfitrião e a apresentação (versões). */
+export const NET_OPEN_TIMEOUT = 10;
+export const NET_CONNECT_TIMEOUT = 15;
+export const NET_HANDSHAKE_TIMEOUT = 8;
+/** Tentativas de abrir a sala com outro código se o sorteado já estiver em uso. */
+export const NET_HOST_ID_RETRIES = 3;
+/** Espera (s) para a mensagem de saída chegar antes de fechar a conexão. */
+export const NET_LEAVE_FLUSH = 0.3;
+/** No máximo tantas mensagens inválidas registradas no console por sessão. */
+export const NET_MAX_INVALID_LOGS = 20;

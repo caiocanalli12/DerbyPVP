@@ -1,21 +1,21 @@
 import Phaser from 'phaser';
-import { BOIL_FPS, GAME_HEIGHT, GAME_WIDTH } from '../config/constants';
+import { GAME_HEIGHT, GAME_WIDTH } from '../config/constants';
 import { audio } from '../audio/AudioManager';
-import { CREAM, CREAM_CSS, FONT_TEXT, FONT_TITLE, INK, INK_CSS } from '../art/style';
+import { CREAM, CREAM_CSS, FONT_TEXT, INK, INK_CSS } from '../art/style';
 import { FilmView, filmEffectsEnabled } from '../render/FilmView';
 import { addSunburst, addTitle, ButtonList, readMenuInput, setGlow } from '../render/menu';
 
 interface ModeOption {
   label: string;
-  /** Cena que a opção abre (null = ainda não disponível). */
-  scene: string | null;
+  /** Cena que a opção abre. */
+  scene: string;
 }
 
-/** Os três modos. O online (fase 20) ainda não está ligado. */
+/** Os três modos. */
 const OPTIONS: readonly ModeOption[] = [
   { label: '1 JOGADOR — CAMPEONATO', scene: 'SoloSetupScene' },
   { label: '2 JOGADORES — LOCAL', scene: 'TeamSelectScene' },
-  { label: 'ONLINE — SALA', scene: null },
+  { label: 'ONLINE — SALA', scene: 'OnlineMenuScene' },
 ];
 
 /** Moldura dos botões: centro, tamanho e espaço entre os botões (px). */
@@ -23,12 +23,6 @@ const PANEL_Y = 425;
 const PANEL_W = 600;
 const PANEL_H = 350;
 const BUTTON_GAP = 95;
-/** Transparência das opções indisponíveis. */
-const DIMMED_ALPHA = 0.5;
-/** Carimbo "EM BREVE": posição em relação ao centro do botão e inclinação (graus). */
-const STAMP_DX = 196;
-const STAMP_DY = -31;
-const STAMP_ANGLE = -10;
 
 /**
  * Menu principal: escolha do modo de jogo sobre raios girando, num cartaz art déco.
@@ -38,11 +32,10 @@ export class MainMenuScene extends Phaser.Scene {
   private rays!: Phaser.GameObjects.Image;
   private logo!: Phaser.GameObjects.Text;
   private list!: ButtonList;
-  private stamps: Phaser.GameObjects.Text[] = [];
   private film!: FilmView;
   private leaving = false;
   /** Última opção escolhida (a cena é reaproveitada; o cursor volta para ela). */
-  private lastIndex = OPTIONS.findIndex((o) => o.scene !== null);
+  private lastIndex = 0;
 
   constructor() {
     super('MainMenuScene');
@@ -50,7 +43,6 @@ export class MainMenuScene extends Phaser.Scene {
 
   create(): void {
     this.leaving = false;
-    this.stamps = [];
     this.cameras.main.setBackgroundColor('#2a1a10');
     this.cameras.main.fadeIn(200, 20, 12, 8);
     this.rays = addSunburst(this, 0x2e8b7e, 0x24766b);
@@ -64,23 +56,6 @@ export class MainMenuScene extends Phaser.Scene {
 
     const y0 = PANEL_Y - BUTTON_GAP;
     this.list = new ButtonList(this, cx, y0, OPTIONS.map((o) => o.label), BUTTON_GAP, 10);
-    OPTIONS.forEach((o, i) => {
-      if (o.scene) return;
-      this.list.buttons[i]!.setAlpha(DIMMED_ALPHA);
-      this.stamps.push(
-        this.add
-          .text(cx + STAMP_DX, y0 + i * BUTTON_GAP + STAMP_DY, 'EM BREVE', {
-            fontFamily: FONT_TITLE,
-            fontSize: '22px',
-            color: '#c8102e',
-            stroke: '#fff3d6',
-            strokeThickness: 6,
-          })
-          .setOrigin(0.5)
-          .setAngle(STAMP_ANGLE)
-          .setDepth(13),
-      );
-    });
     this.list.index = Math.max(0, this.lastIndex);
     this.list.refresh();
 
@@ -161,9 +136,6 @@ export class MainMenuScene extends Phaser.Scene {
     this.rays.setRotation(t * 0.07);
     this.logo.setScale(1 + Math.sin(t * 2.2) * 0.012);
     this.list.update(t);
-    // Os carimbos fervem junto com as placas.
-    const boil = (Math.floor(t * BOIL_FPS) % 3) - 1;
-    for (const s of this.stamps) s.setAngle(STAMP_ANGLE + boil * 0.8);
     this.film.update(t, Math.min(0.25, this.game.loop.rawDelta / 1000));
 
     if (this.leaving) return;
@@ -176,8 +148,6 @@ export class MainMenuScene extends Phaser.Scene {
     const chosen = this.list.handle(input, () => audio.play('menu-mover'));
     if (chosen === null) return;
     const scene = OPTIONS[chosen]!.scene;
-    // Opção "EM BREVE": confirmar não faz nada.
-    if (!scene) return;
     audio.play('menu-confirmar');
     this.lastIndex = chosen;
     this.leave(scene);

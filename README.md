@@ -10,7 +10,7 @@ Depois da tela inicial, o menu principal mostra os modos de jogo:
 
 - **1 JOGADOR — CAMPEONATO**: você contra o computador num mata-mata de 8 times (veja abaixo).
 - **2 JOGADORES — LOCAL**: os dois jogadores no mesmo teclado (o jogo descrito abaixo).
-- **ONLINE — SALA**: aparece marcado como *EM BREVE* e chega numa próxima versão.
+- **ONLINE — SALA**: duas pessoas, cada uma no seu computador, numa sala com código ou link (veja abaixo).
 
 Qualquer um dos dois conjuntos de teclas navega no menu (W/S ou setas); F, `;` ou Enter confirma e G ou `.` volta para a tela inicial.
 
@@ -43,6 +43,23 @@ Escolha o seu time e a dificuldade: **FÁCIL** (adversários fácil nas quartas,
 No modo solo você joga com o time da esquerda e pode usar **os dois conjuntos de teclas ao mesmo tempo** (WASD + F + G e setas + `;` + `.`). Na pausa, *Abandonar campeonato* encerra o campeonato (pede confirmação).
 
 Para testar: uma partida avulsa contra o computador abre com `?cpu=facil`, `?cpu=medio` ou `?cpu=dificil` no endereço (por exemplo, `http://localhost:5173/?cpu=medio&t1=PAL&t2=COR`).
+
+## Online — Sala
+
+Sem login e sem servidor próprio: os navegadores se encontram pelo servidor público de sinalização da [PeerJS](https://peerjs.com) e depois conversam direto (WebRTC).
+
+- **Criar sala**: aparece um código de 5 letras e números e o botão **Copiar link**. Mande o código ou o link para o seu adversário. Quem cria a sala joga com o time da esquerda no 1º tempo.
+- **Entrar com código**: digite o código (minúsculas valem) ou cole o link. Abrir o link entra direto na sala.
+- Cada um escolhe o próprio time na própria tela e vê a escolha do outro; o mesmo time pode (o visitante usa o uniforme reserva). Os dois conjuntos de teclas funcionam juntos.
+- **Limitação conhecida:** sem um servidor TURN próprio, algumas redes muito restritivas (alguns ambientes corporativos ou de faculdade) podem não conectar. Nesse caso aparece "Não foi possível conectar. Tente outra rede."
+
+### Testando o online sozinho
+
+1. Rode `npm run dev` (ou abra a versão publicada).
+2. Abra o jogo numa janela normal e em outra **janela anônima** do navegador (são sessões separadas, como dois computadores).
+3. Na primeira: **ONLINE — SALA → CRIAR SALA** e **COPIAR LINK**.
+4. Na anônima: cole o link na barra de endereço (ou vá em **ENTRAR COM CÓDIGO** e digite o código).
+5. Escolha um time em cada janela e confirme nas duas.
 
 ## Rodando localmente
 
