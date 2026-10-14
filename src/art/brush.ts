@@ -42,7 +42,7 @@ export function light(color: number, amount = 0.25): number {
  * Preenche um caminho com contorno de pincel: a tinta é aplicada também um pouco abaixo,
  * o que deixa o traço mais grosso na parte de baixo.
  */
-export function inkFill(ctx: Ctx, path: () => void, fill: string, line: number): void {
+export function inkFill(ctx: Ctx, path: () => void, fill: string | CanvasGradient, line: number): void {
   ctx.save();
   ctx.translate(0, DROP);
   ctx.beginPath();

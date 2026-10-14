@@ -16,6 +16,8 @@ import { CombinedKeyboardSource, KeyboardTickSampler, LocalKeyboardSource } from
 import type { CommandSource } from '../sim/command';
 import { CpuSource, isCpuLevel } from '../sim/cpu';
 import type { CpuLevel } from '../sim/cpu';
+import { recordPlayerMatch } from '../sim/tournament';
+import type { Tournament } from '../sim/tournament';
 import { DEPTH_UI } from '../core/projection';
 import { audio } from '../audio/AudioManager';
 import { BallView } from '../render/BallView';
@@ -67,6 +69,8 @@ export interface MatchConfig {
   mode: GameMode;
   /** Nível do CPU adversário (modo solo; sem isso, Médio). */
   cpuLevel?: CpuLevel;
+  /** Campeonato em andamento (modo solo): no fim, a partida volta para a chave. */
+  tournament?: Tournament;
 }
 
 /** Nível do CPU quando o modo solo não diz qual. */
@@ -148,6 +152,7 @@ export class MatchScene extends Phaser.Scene {
       kits: data.kits,
       mode: data.mode ?? (isCpuLevel(cpu) ? 'solo' : 'local'),
       cpuLevel: data.cpuLevel ?? (isCpuLevel(cpu) ? cpu : undefined),
+      tournament: data.tournament,
     };
   }
 
@@ -351,6 +356,16 @@ export class MatchScene extends Phaser.Scene {
     const winner = matchWinner(m) ?? 0;
     const pens = m.shootout ? ([goalsOf(m.shootout, 0), goalsOf(m.shootout, 1)] as [number, number]) : null;
     this.cameras.main.fadeOut(300, 20, 12, 8);
+    const t = this.config.tournament;
+    if (t) {
+      // Campeonato: o resultado entra na chave (o jogador é sempre o J1); campeão vai para a festa.
+      const next = recordPlayerMatch(t, { score: [m.score[0], m.score[1]], penalties: pens, winner });
+      this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+        if (next.status === 'champion') this.scene.start('ChampionScene', { tournament: next });
+        else this.scene.start('BracketScene', { tournament: next, stage: next.status === 'eliminated' ? 'eliminated' : 'advance' });
+      });
+      return;
+    }
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () =>
       this.scene.start('ResultScene', {
         teams: this.config.teams,

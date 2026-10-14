@@ -3,7 +3,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from '../config/constants';
 import { audio } from '../audio/AudioManager';
 import { CREAM, CREAM_CSS, FONT_TEXT, INK } from '../art/style';
 import { filmEffectsEnabled, setFilmEffectsEnabled } from '../render/FilmView';
-import { addTitle, ButtonList, readMenuInput } from '../render/menu';
+import { addTitle, ButtonList, ConfirmDialog, readMenuInput } from '../render/menu';
 import type { MatchConfig } from './MatchScene';
 
 export interface PauseData {
@@ -16,7 +16,7 @@ export const PAUSE_EVENTS = {
   filmToggle: 'pause-film',
 } as const;
 
-type PauseOption = 'resume' | 'restart' | 'film' | 'volume' | 'sound' | 'quit';
+type PauseOption = 'resume' | 'restart' | 'film' | 'volume' | 'sound' | 'quit' | 'abandon';
 
 /**
  * Moldura (px): tamanho, posição do título e dos botões. O topo fica logo abaixo da aba do relógio
@@ -33,13 +33,15 @@ const HINT_DY = PANEL_H - 34;
 /**
  * Pausa (Esc/P): escurece a partida com uma moldura art déco.
  * Opções: Continuar, Reiniciar partida, Efeitos de filme (ligado/desligado), Volume (A/D ou ←/→),
- * Som (ligado/desligado; a tecla M faz o mesmo em qualquer tela) e Sair para o menu.
+ * Som (ligado/desligado; a tecla M faz o mesmo em qualquer tela) e Sair para o menu. No campeonato,
+ * a última opção é Abandonar campeonato (com confirmação).
  */
 export class PauseScene extends Phaser.Scene {
   private list!: ButtonList;
   private options: PauseOption[] = [];
   private config!: MatchConfig;
   private closing = false;
+  private confirm: ConfirmDialog | null = null;
 
   constructor() {
     super('PauseScene');
@@ -76,7 +78,8 @@ export class PauseScene extends Phaser.Scene {
       }
     }
     addTitle(this, GAME_WIDTH / 2, y + TITLE_DY, 'PAUSA', 64);
-    this.options = ['resume', 'restart', 'film', 'volume', 'sound', 'quit'];
+    this.confirm = null;
+    this.options = ['resume', 'restart', 'film', 'volume', 'sound', this.config.tournament ? 'abandon' : 'quit'];
     this.list = new ButtonList(
       this,
       GAME_WIDTH / 2,
@@ -111,6 +114,8 @@ export class PauseScene extends Phaser.Scene {
         return `SOM: ${audio.muted ? 'DESLIGADO' : 'LIGADO'}`;
       case 'quit':
         return 'SAIR PARA O MENU';
+      case 'abandon':
+        return 'ABANDONAR CAMPEONATO';
     }
   }
 
@@ -120,8 +125,17 @@ export class PauseScene extends Phaser.Scene {
 
   override update(time: number): void {
     this.list.update(time / 1000);
+    this.confirm?.update(time / 1000);
     if (this.closing) return;
     const input = readMenuInput();
+    if (this.confirm) {
+      const answer = input.pause ? 'cancel' : this.confirm.handle(input);
+      if (answer === null) return;
+      this.confirm.destroy();
+      this.confirm = null;
+      if (answer === 'ok') this.quitToMenu();
+      return;
+    }
     if (input.pause || input.players.some((p) => p.back)) {
       this.resume();
       return;
@@ -161,13 +175,20 @@ export class PauseScene extends Phaser.Scene {
         audio.toggleMute();
         break;
       case 'quit':
-        this.closing = true;
-        this.scene.stop('MatchScene');
-        this.scene.start('MainMenuScene');
+        this.quitToMenu();
+        break;
+      case 'abandon':
+        this.confirm = new ConfirmDialog(this, 'ABANDONAR?', 'O campeonato será perdido.', ['CONTINUAR NO CAMPEONATO', 'ABANDONAR']);
         break;
       case undefined:
         break;
     }
+  }
+
+  private quitToMenu(): void {
+    this.closing = true;
+    this.scene.stop('MatchScene');
+    this.scene.start('MainMenuScene');
   }
 
   private resume(): void {

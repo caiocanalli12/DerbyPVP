@@ -8,8 +8,9 @@ Feito com TypeScript, Phaser 3.80.1 e Vite. Tudo (jogadores, estádio, torcida, 
 
 Depois da tela inicial, o menu principal mostra os modos de jogo:
 
+- **1 JOGADOR — CAMPEONATO**: você contra o computador num mata-mata de 8 times (veja abaixo).
 - **2 JOGADORES — LOCAL**: os dois jogadores no mesmo teclado (o jogo descrito abaixo).
-- **1 JOGADOR — CAMPEONATO** e **ONLINE — SALA**: aparecem marcados como *EM BREVE* e chegam nas próximas versões.
+- **ONLINE — SALA**: aparece marcado como *EM BREVE* e chega numa próxima versão.
 
 Qualquer um dos dois conjuntos de teclas navega no menu (W/S ou setas); F, `;` ou Enter confirma e G ou `.` volta para a tela inicial.
 
@@ -35,9 +36,13 @@ O `;` funciona tanto no teclado brasileiro (ABNT2, tecla ao lado do `.`) quanto 
 
 Os efeitos sonoros (chute, passe, apito, gol e defesa) são sintetizados na hora pelo navegador (Web Audio), com timbre de rádio antigo; não há arquivos de áudio. Por regra dos navegadores, o som só começa depois do primeiro clique ou tecla. **M** liga e desliga o som em qualquer tela, e o menu de pausa tem o volume (A/D ou ←/→) e a opção de som. A escolha fica salva no navegador.
 
-## Partida de teste contra o computador
+## 1 Jogador — Campeonato
 
-O modo **1 Jogador** (campeonato) ainda está sendo construído. Enquanto isso, dá para jogar uma partida avulsa contra o computador abrindo o jogo com `?cpu=facil`, `?cpu=medio` ou `?cpu=dificil` no endereço (por exemplo, `http://localhost:5173/?cpu=medio&t1=PAL&t2=COR`). Você joga com o time da esquerda e pode usar os dois conjuntos de teclas ao mesmo tempo (WASD + F + G e setas + `;` + `.`).
+Escolha o seu time e a dificuldade: **FÁCIL** (adversários fácil nas quartas, médio na semifinal e na final) ou **DIFÍCIL** (fácil, médio e um adversário difícil na final). Os outros 7 times são sorteados numa chave de quartas de final, semifinal e final; antes de cada jogo a chave mostra o adversário e o nível dele em estrelas. Os outros jogos de cada fase são simulados e o placar aparece na chave. Perdeu, está eliminado; ganhou a final, é campeão.
+
+No modo solo você joga com o time da esquerda e pode usar **os dois conjuntos de teclas ao mesmo tempo** (WASD + F + G e setas + `;` + `.`). Na pausa, *Abandonar campeonato* encerra o campeonato (pede confirmação).
+
+Para testar: uma partida avulsa contra o computador abre com `?cpu=facil`, `?cpu=medio` ou `?cpu=dificil` no endereço (por exemplo, `http://localhost:5173/?cpu=medio&t1=PAL&t2=COR`).
 
 ## Rodando localmente
 

@@ -5,7 +5,7 @@ import { audio } from '../audio/AudioManager';
 import { generateTitleBall, TITLE_BALL_KEY, TITLE_BALL_LIGHT_KEY, TITLE_BALL_RADIUS } from '../art/preview-art';
 import { CREAM_CSS, FONT_TEXT, INK_CSS } from '../art/style';
 import { FilmView, filmEffectsEnabled } from '../render/FilmView';
-import { addSunburst, addTitle, readMenuInput } from '../render/menu';
+import { addSunburst, addTitle, readMenuInput, setGlow } from '../render/menu';
 
 /** Altura do quique (px): no alto, a bola ainda passa por baixo do subtítulo. */
 const BALL_BOUNCE_HEIGHT = 120;
@@ -35,7 +35,7 @@ export class TitleScene extends Phaser.Scene {
     this.rays = addSunburst(this);
     generateTitleBall(this);
 
-    addTitle(this, GAME_WIDTH / 2, 196, 'DERBY PVP', 150).setShadow(0, 0, '#ffe27a', 26, true, true).setDepth(5);
+    setGlow(addTitle(this, GAME_WIDTH / 2, 196, 'DERBY PVP', 150), '#ffe27a', 26).setDepth(5);
     this.logo = addTitle(this, GAME_WIDTH / 2, 196, 'DERBY PVP', 150).setDepth(6);
     addTitle(this, GAME_WIDTH / 2, 300, 'FUTEBOL DE SALÃO · 1930', 34).setDepth(6);
 

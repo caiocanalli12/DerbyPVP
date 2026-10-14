@@ -854,3 +854,31 @@ export const CPU_PEN_POWER = 0.7;
 export const CPU_PEN_THINK_MIN = 0.8;
 export const CPU_PEN_THINK_MAX = 1.8;
 export const CPU_PEN_DEADLINE_MARGIN = 0.4;
+
+// ---------------------------------------------------------------------------
+// Campeonato (modo solo)
+// ---------------------------------------------------------------------------
+
+/**
+ * Nível do CPU em cada fase do campeonato (quartas, semifinal, final) para cada dificuldade
+ * escolhida: FÁCIL = Fácil, Médio, Médio; DIFÍCIL = Fácil, Médio, Difícil.
+ */
+export const CHAMPIONSHIP_LEVELS = {
+  facil: ['facil', 'medio', 'medio'],
+  dificil: ['facil', 'medio', 'dificil'],
+} as const;
+/** Jogos simulados: média de gols de cada time (Poisson) e acerto de cada cobrança de pênalti. */
+export const TOURNAMENT_GOALS_MEAN = 1.4;
+export const TOURNAMENT_PEN_SCORE_CHANCE = 0.75;
+
+/** Sorteio da chave: tempo (s) de cada vaga "rodando" antes de parar, e entre uma vaga e a próxima. */
+export const BRACKET_DRAW_SPIN = 0.55;
+export const BRACKET_DRAW_STEP = 0.24;
+/** Troca de escudo (por s) enquanto a vaga roda no sorteio. */
+export const BRACKET_DRAW_SPIN_RATE = 14;
+/** Depois de uma vitória: atraso (s) antes de mostrar os outros jogos da fase e entre um e outro. */
+export const BRACKET_REVEAL_DELAY = 0.6;
+export const BRACKET_REVEAL_STEP = 0.55;
+/** Cartão "ELIMINADO": tempo mínimo (s) antes de poder pular e tempo até sair sozinho. */
+export const ELIMINATED_CARD_MIN = 0.8;
+export const ELIMINATED_CARD_TIME = 2.6;

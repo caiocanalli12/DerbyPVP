@@ -13,6 +13,9 @@ import { TeamSelectScene } from './scenes/TeamSelectScene';
 import { VersusScene } from './scenes/VersusScene';
 import { PauseScene } from './scenes/PauseScene';
 import { ResultScene } from './scenes/ResultScene';
+import { SoloSetupScene } from './scenes/SoloSetupScene';
+import { BracketScene } from './scenes/BracketScene';
+import { ChampionScene } from './scenes/ChampionScene';
 import { OverlayScene } from './scenes/OverlayScene';
 import { keyboard } from './core/input';
 import { audio } from './audio/AudioManager';
@@ -66,10 +69,13 @@ async function start(): Promise<void> {
       TitleScene,
       MainMenuScene,
       TeamSelectScene,
+      SoloSetupScene,
+      BracketScene,
       VersusScene,
       MatchScene,
       PauseScene,
       ResultScene,
+      ChampionScene,
       ArtPreviewScene,
       // Por último: desenha por cima de todas as outras.
       OverlayScene,

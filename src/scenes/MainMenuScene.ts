@@ -3,7 +3,7 @@ import { BOIL_FPS, GAME_HEIGHT, GAME_WIDTH } from '../config/constants';
 import { audio } from '../audio/AudioManager';
 import { CREAM, CREAM_CSS, FONT_TEXT, FONT_TITLE, INK, INK_CSS } from '../art/style';
 import { FilmView, filmEffectsEnabled } from '../render/FilmView';
-import { addSunburst, addTitle, ButtonList, readMenuInput } from '../render/menu';
+import { addSunburst, addTitle, ButtonList, readMenuInput, setGlow } from '../render/menu';
 
 interface ModeOption {
   label: string;
@@ -11,9 +11,9 @@ interface ModeOption {
   scene: string | null;
 }
 
-/** Os três modos. O solo (fases 18/19) e o online (fase 20) ainda não estão ligados. */
+/** Os três modos. O online (fase 20) ainda não está ligado. */
 const OPTIONS: readonly ModeOption[] = [
-  { label: '1 JOGADOR — CAMPEONATO', scene: null },
+  { label: '1 JOGADOR — CAMPEONATO', scene: 'SoloSetupScene' },
   { label: '2 JOGADORES — LOCAL', scene: 'TeamSelectScene' },
   { label: 'ONLINE — SALA', scene: null },
 ];
@@ -56,7 +56,7 @@ export class MainMenuScene extends Phaser.Scene {
     this.rays = addSunburst(this, 0x2e8b7e, 0x24766b);
 
     const cx = GAME_WIDTH / 2;
-    addTitle(this, cx, 112, 'DERBY PVP', 96).setShadow(0, 0, '#ffe27a', 22, true, true).setDepth(5);
+    setGlow(addTitle(this, cx, 112, 'DERBY PVP', 96), '#ffe27a', 22).setDepth(5);
     this.logo = addTitle(this, cx, 112, 'DERBY PVP', 96).setDepth(6);
     const subtitle = addTitle(this, cx, 196, 'MENU PRINCIPAL', 32).setDepth(6);
     this.drawOrnaments(cx, 196, subtitle.width);
