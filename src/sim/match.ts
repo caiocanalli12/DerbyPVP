@@ -41,6 +41,8 @@ import {
 } from './world';
 import type { HumanInputs, World } from './world';
 import { emptyCommand } from './command';
+import { soundCues } from './sound';
+import type { SoundEvent } from './sound';
 import type { TeamCommand } from './command';
 import { cancelCharge, passTo } from './control';
 import { choosePassTarget } from './kick';
@@ -85,7 +87,7 @@ export type MatchEvent =
   | { type: 'sidesSwapped' }
   | { type: 'intertitle'; text: string }
   | { type: 'finalWhistle' }
-  | { type: 'penaltyKick'; team: TeamIndex }
+  | { type: 'penaltyKick'; team: TeamIndex; power: number }
   | { type: 'penaltyResult'; team: TeamIndex; result: PenaltyResult };
 
 export interface Match {
@@ -115,6 +117,10 @@ export interface Match {
   /** Cobrança em andamento. */
   attempt: PenaltyAttempt | null;
   events: MatchEvent[];
+  /** Sons emitidos desde a última leitura (drainSounds), um id crescente por som. */
+  sounds: SoundEvent[];
+  /** Id do próximo som. */
+  nextSoundId: number;
 }
 
 export const PERIOD_LABEL: Readonly<Record<Period, string>> = { '1T': '1T', '2T': '2T', PR1: 'PR1', PR2: 'PR2' };
@@ -146,6 +152,8 @@ export function createMatch(seed = 1): Match {
     shootout: null,
     attempt: null,
     events: [],
+    sounds: [],
+    nextSoundId: 1,
   };
   setupKickoff(match, 0);
   return match;
@@ -162,6 +170,13 @@ export function drainMatchEvents(match: Match): MatchEvent[] {
   const ev = match.events;
   match.events = [];
   return ev;
+}
+
+/** Devolve e limpa os sons emitidos (em ordem de id). */
+export function drainSounds(match: Match): SoundEvent[] {
+  const s = match.sounds;
+  match.sounds = [];
+  return s;
 }
 
 /** Time que ataca o gol `side` (quem marca quando a bola entra nele). */
@@ -199,8 +214,8 @@ export function setupKickoff(match: Match, team: TeamIndex): void {
   world.controlSwitchTimer = [0, 0];
   world.controlPrev = [null, null];
   givePossession(world, kicker);
-  // A posse inicial não é um "evento de jogo".
-  world.events = world.events.filter((e) => e.type !== 'possession');
+  // A posse inicial não é um "evento de jogo" (é o último evento, recém-emitido por givePossession).
+  if (world.events[world.events.length - 1]?.type === 'possession') world.events.pop();
   // Bola parada no centro, à frente do batedor.
   world.ball.prevX = world.ball.x = FIELD_CENTER_X;
   world.ball.prevY = world.ball.y = FIELD_CENTER_Y;
@@ -364,8 +379,19 @@ function registerGoal(match: Match, side: GoalSide): void {
 
 const IDLE_INPUTS: HumanInputs = [emptyCommand(), emptyCommand()];
 
-/** Avança a partida um passo fixo. */
+/**
+ * Avança a partida um passo fixo. Os eventos emitidos neste passo viram os sons dele
+ * (`match.sounds`): o áudio toca só o que a simulação manda.
+ */
 export function stepMatch(match: Match, inputs: HumanInputs, dt: number): void {
+  const worldStart = match.world.events.length;
+  const matchStart = match.events.length;
+  advanceMatch(match, inputs, dt);
+  const cues = soundCues(match.world.events.slice(worldStart), match.events.slice(matchStart), match.world.ball.x);
+  for (const cue of cues) match.sounds.push({ ...cue, id: match.nextSoundId++ });
+}
+
+function advanceMatch(match: Match, inputs: HumanInputs, dt: number): void {
   match.phaseTimer += dt;
   const world = match.world;
 
@@ -524,7 +550,7 @@ function stepPenalties(match: Match, inputs: HumanInputs, dt: number): void {
       a.phase = 'flight';
       a.timer = 0;
       a.charging = false;
-      match.events.push({ type: 'penaltyKick', team: a.team });
+      match.events.push({ type: 'penaltyKick', team: a.team, power: a.plan.power });
       // O goleiro mergulha para a zona escolhida.
       if (a.plan.keeperZone !== 'C') {
         keeperState.mode = 'dive';

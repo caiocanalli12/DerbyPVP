@@ -13,7 +13,9 @@ import { TeamSelectScene } from './scenes/TeamSelectScene';
 import { VersusScene } from './scenes/VersusScene';
 import { PauseScene } from './scenes/PauseScene';
 import { ResultScene } from './scenes/ResultScene';
+import { OverlayScene } from './scenes/OverlayScene';
 import { keyboard } from './core/input';
+import { audio } from './audio/AudioManager';
 import { setBallFavicon } from './art/ball-art';
 
 /** Força o download das fontes empacotadas e espera ficarem prontas. */
@@ -37,6 +39,8 @@ async function start(): Promise<void> {
 
   // Teclado próprio (KeyboardEvent.code + ';' do ABNT2), ligado à janela.
   keyboard.attach(window);
+  // Som: o primeiro clique ou tecla cria o AudioContext (autoplay); M liga/desliga.
+  audio.attach(window);
 
   const game = new Phaser.Game({
     type: Phaser.AUTO,
@@ -67,12 +71,14 @@ async function start(): Promise<void> {
       PauseScene,
       ResultScene,
       ArtPreviewScene,
+      // Por último: desenha por cima de todas as outras.
+      OverlayScene,
     ],
   });
 
-  // Ferramenta de inspeção: com ?debug na URL, o jogo fica acessível no console.
+  // Ferramenta de inspeção: com ?debug na URL, o jogo e o áudio ficam acessíveis no console.
   if (new URLSearchParams(window.location.search).has('debug')) {
-    (window as unknown as { derby: Phaser.Game }).derby = game;
+    Object.assign(window, { derby: game, derbyAudio: audio });
   }
 }
 

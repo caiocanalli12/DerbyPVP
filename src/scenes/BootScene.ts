@@ -10,6 +10,8 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Camada de avisos (som ligado/desligado), por cima de todas as cenas.
+    this.scene.launch('OverlayScene');
     // Ferramenta de depuração da arte: ?sheet=TIME.
     if (new URLSearchParams(window.location.search).has('sheet')) {
       this.scene.start('ArtPreviewScene');

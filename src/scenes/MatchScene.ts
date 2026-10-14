@@ -46,7 +46,7 @@ import { CROWD_ATTACK_DISTANCE, GOAL_FLASH_MS, GOAL_SHAKE_INTENSITY, GOAL_SHAKE_
 import { goalCenter } from '../sim/field';
 import { attackedGoal } from '../sim/world';
 import { Rng } from '../core/rng';
-import { createMatch, drainMatchEvents, matchWinner, PENALTY_GOAL, stepMatch } from '../sim/match';
+import { createMatch, drainMatchEvents, drainSounds, matchWinner, PENALTY_GOAL, stepMatch } from '../sim/match';
 import { goalsOf } from '../sim/penalties';
 import { PAUSE_EVENTS } from './PauseScene';
 import type { Match } from '../sim/match';
@@ -227,6 +227,8 @@ export class MatchScene extends Phaser.Scene {
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.ready = false;
+      // Reiniciar ou sair pela pausa: o resto de um som (o sino do gol) não passa para a próxima tela.
+      audio.stopAll();
       this.game.events.off(PAUSE_EVENTS.resume, this.onResume, this);
       this.game.events.off(PAUSE_EVENTS.filmToggle, this.onFilmToggle, this);
       this.debug.destroy();
@@ -366,34 +368,26 @@ export class MatchScene extends Phaser.Scene {
     return moods;
   }
 
-  /** Eventos da simulação -> áudio (vazio por enquanto) e efeitos. */
+  /** Eventos da simulação -> sons (os que a simulação emitiu) e efeitos. */
   private consumeEvents(): void {
+    for (const s of drainSounds(this.match)) audio.playSound(s);
     for (const e of drainEvents(this.match.world)) {
       this.effects.onEvent(e, this.match);
       if (e.type === 'goal') this.fieldView.goalScored(e.side, this.time.now / 1000);
       this.playersView.onEvent(e, this.match);
-      if (e.type === 'pass') audio.play('passe');
-      else if (e.type === 'shot') audio.play('chute');
-      else if (e.type === 'contact' && (e.kind === 'post' || e.kind === 'bar')) audio.play('trave');
-      else if (e.type === 'tackleStart') audio.play('dividida');
-      else if (e.type === 'save') audio.play('defesa');
     }
     for (const e of drainMatchEvents(this.match)) {
-      if (e.type === 'whistle') audio.play('apito');
-      else if (e.type === 'finalWhistle' || e.type === 'periodEnd') audio.play('apito-final');
-      else if (e.type === 'goal') {
-        audio.play('gol');
-        // Comemoração: "GOOOL!" elástico, tremor e flash (a torcida e o autor já reagem).
+      if (e.type === 'goal') {
+        // Comemoração: "GOOOL!" elástico, tremor e flash (a torcida e o autor já reagem); o som
+        // do gol sai no mesmo passo, junto com a entrada do texto.
         this.goalText.show(e.goal.team, this.time.now / 1000);
         this.cameras.main.shake(GOAL_SHAKE_MS, GOAL_SHAKE_INTENSITY);
         this.cameras.main.flash(GOAL_FLASH_MS, 255, 250, 235);
       }
       else if (e.type === 'penaltyKick') {
-        audio.play('chute');
         if (this.match.attempt) this.playersView.onPenaltyKick(this.match.attempt.kicker);
       }
       else if (e.type === 'penaltyResult' && e.result === 'goal') {
-        audio.play('gol');
         this.fieldView.goalScored(PENALTY_GOAL, this.time.now / 1000);
         this.cameras.main.shake(GOAL_SHAKE_MS * 0.6, GOAL_SHAKE_INTENSITY * 0.6);
       }

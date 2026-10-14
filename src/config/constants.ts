@@ -613,3 +613,88 @@ export const KIT_REFUSED_FLASH = 1.4;
 
 /** Resolução do fundo de raios dos menus em relação à tela (é ampliado ao desenhar). */
 export const MENU_SUNBURST_RES = 0.6;
+
+// ---------------------------------------------------------------------------
+// Som (sintetizado com Web Audio, sem arquivos)
+// ---------------------------------------------------------------------------
+
+/** Volume master inicial (0..1) e passo do ajuste na pausa. O ganho aplicado é volume². */
+export const AUDIO_DEFAULT_VOLUME = 0.8;
+export const AUDIO_VOLUME_STEP = 0.1;
+/** Filtro "rádio antigo": corta abaixo e acima destas frequências (Hz), de leve. */
+export const AUDIO_RADIO_LOW_HZ = 150;
+export const AUDIO_RADIO_HIGH_HZ = 6000;
+/** Pan estéreo máximo (bola numa ponta do campo = ±isto). */
+export const AUDIO_PAN_MAX = 0.4;
+/** No máximo estas vozes do mesmo tipo tocando juntas (a mais antiga é cortada). */
+export const AUDIO_MAX_VOICES_PER_TYPE = 2;
+/**
+ * Proteção contra estouro depois do master: linear até este nível e curva suave acima dele, que
+ * só chega ao máximo (1) com entrada de AUDIO_CLIP_HEADROOM (vários sons fortes juntos).
+ */
+export const AUDIO_CLIP_KNEE = 0.7;
+export const AUDIO_CLIP_HEADROOM = 2.5;
+/** Tempo (s) do corte suave de uma voz e da mudança de volume (sem estalos). */
+export const AUDIO_FADE_TIME = 0.03;
+/** Atraso (s) entre agendar e tocar (o relógio do áudio anda em blocos). */
+export const AUDIO_START_DELAY = 0.005;
+/** Aviso do botão M (som ligado/desligado): duração (s). */
+export const AUDIO_TOAST_TIME = 1.4;
+
+/** Chute: "tum" grave com queda de afinação, mais um estalo de ruído. Volume e brilho crescem com a força. */
+export const SFX_KICK_FREQ_START = 180;
+export const SFX_KICK_FREQ_END = 60;
+export const SFX_KICK_DROP_TIME = 0.12;
+export const SFX_KICK_DECAY = 0.3;
+export const SFX_KICK_GAIN_MIN = 0.45;
+export const SFX_KICK_GAIN_MAX = 0.95;
+export const SFX_KICK_CLICK_GAIN = 0.32;
+export const SFX_KICK_CLICK_HZ_MIN = 900;
+export const SFX_KICK_CLICK_HZ_MAX = 3400;
+export const SFX_KICK_CLICK_TIME = 0.05;
+/** Passe: toque mais leve, curto e agudo que o chute, com pouco ruído. */
+export const SFX_PASS_FREQ_START = 260;
+export const SFX_PASS_FREQ_END = 120;
+export const SFX_PASS_DROP_TIME = 0.07;
+export const SFX_PASS_DECAY = 0.15;
+export const SFX_PASS_GAIN = 0.42;
+export const SFX_PASS_CLICK_GAIN = 0.07;
+export const SFX_PASS_CLICK_HZ = 2200;
+export const SFX_PASS_CLICK_TIME = 0.025;
+/** Apito: dois osciladores próximos (Hz) com trilo (vibrato rápido). Durações e pausa em s. */
+export const SFX_WHISTLE_FREQ = 2800;
+export const SFX_WHISTLE_DETUNE_HZ = 38;
+export const SFX_WHISTLE_TRILL_HZ = 24;
+export const SFX_WHISTLE_TRILL_DEPTH_HZ = 85;
+export const SFX_WHISTLE_GAIN = 0.11;
+export const SFX_WHISTLE_SHORT = 0.2;
+export const SFX_WHISTLE_LONG = 0.9;
+export const SFX_WHISTLE_GAP = 0.13;
+/** Gol: sino (parciais inarmônicos, decaimento longo) e o apito de êmbolo subindo depois dele. */
+export const SFX_GOAL_BELL_HZ = 640;
+export const SFX_GOAL_BELL_PARTIALS: readonly number[] = [0.56, 0.92, 1.19, 1.71, 2.0, 2.74, 3.0, 3.76];
+/** Ganho relativo e duração relativa de cada parcial (os graves duram mais). */
+export const SFX_GOAL_BELL_PARTIAL_GAINS: readonly number[] = [0.6, 0.45, 0.7, 1, 0.8, 0.5, 0.4, 0.3];
+export const SFX_GOAL_BELL_PARTIAL_DECAYS: readonly number[] = [1, 0.9, 0.65, 0.55, 0.4, 0.35, 0.25, 0.2];
+export const SFX_GOAL_BELL_DECAY = 2.4;
+export const SFX_GOAL_BELL_GAIN = 0.16;
+export const SFX_GOAL_SLIDE_DELAY = 0.2;
+export const SFX_GOAL_SLIDE_FROM = 440;
+export const SFX_GOAL_SLIDE_TO = 1760;
+export const SFX_GOAL_SLIDE_TIME = 0.7;
+export const SFX_GOAL_SLIDE_VIBRATO_HZ = 7;
+export const SFX_GOAL_SLIDE_VIBRATO_DEPTH = 0.025;
+export const SFX_GOAL_SLIDE_GAIN = 0.16;
+/** Defesa: "tum" abafado das luvas e um "boing" de mola (vibrato que se acalma). */
+export const SFX_SAVE_THUMP_FREQ_START = 150;
+export const SFX_SAVE_THUMP_FREQ_END = 70;
+export const SFX_SAVE_THUMP_LOWPASS_HZ = 500;
+export const SFX_SAVE_THUMP_DECAY = 0.16;
+export const SFX_SAVE_THUMP_GAIN = 0.7;
+export const SFX_SAVE_BOING_DELAY = 0.03;
+export const SFX_SAVE_BOING_HZ = 300;
+export const SFX_SAVE_BOING_RISE = 1.35;
+export const SFX_SAVE_BOING_WOBBLE_HZ = 13;
+export const SFX_SAVE_BOING_WOBBLE_DEPTH = 0.3;
+export const SFX_SAVE_BOING_TIME = 0.5;
+export const SFX_SAVE_BOING_GAIN = 0.16;

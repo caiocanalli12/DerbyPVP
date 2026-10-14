@@ -21,6 +21,7 @@ Qualquer um dos dois conjuntos de teclas navega no menu (W/S ou setas); F, `;` o
 | Passe | F | `;` (ponto e vírgula) |
 | Chute (segure para carregar) / dividida sem a bola | G | `.` (ponto) |
 | Pausa | Esc ou P | Esc ou P |
+| Som liga/desliga | M | M |
 
 Nos menus: J1 usa W/A/S/D, F confirma e G volta; J2 usa as setas, `;` confirma e `.` volta. Enter também confirma.
 
@@ -29,6 +30,10 @@ Na escolha de times, cada jogador troca entre o uniforme 1 (titular) e o 2 (rese
 O `;` funciona tanto no teclado brasileiro (ABNT2, tecla ao lado do `.`) quanto no americano.
 
 > **Aviso sobre teclados:** alguns teclados mais simples não conseguem registrar muitas teclas apertadas ao mesmo tempo (*ghosting*). Se um comando "sumir" quando os dois jogadores apertam várias teclas juntos, é limitação do hardware do teclado, não um bug do jogo.
+
+## Som
+
+Os efeitos sonoros (chute, passe, apito, gol e defesa) são sintetizados na hora pelo navegador (Web Audio), com timbre de rádio antigo; não há arquivos de áudio. Por regra dos navegadores, o som só começa depois do primeiro clique ou tecla. **M** liga e desliga o som em qualquer tela, e o menu de pausa tem o volume (A/D ou ←/→) e a opção de som. A escolha fica salva no navegador.
 
 ## Rodando localmente
 

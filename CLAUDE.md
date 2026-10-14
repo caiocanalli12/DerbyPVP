@@ -9,7 +9,7 @@ Jogo de futebol 5x5 para navegador, 2 jogadores locais no mesmo teclado, visual 
 - **Todo número ajustável** (velocidades, tempos, tamanhos, probabilidades) fica em `src/config/constants.ts`.
 - **Simulação (`src/sim/`) é lógica pura**: nunca importa Phaser, é determinística (RNG com seed de `core/rng.ts`) e testável.
 - Renderização (Phaser) só espelha a simulação. Toda conversão mundo → tela passa por `core/projection.ts`.
-- Sem som. `audio/AudioManager.ts` tem `play(eventName)` vazio, chamado nos pontos certos (chute, passe, gol, apito).
+- Som só sintetizado (Web Audio, sem arquivos) e só a partir dos eventos da simulação (`match.sounds`), nunca da renderização. Sem música nem torcida ambiente.
 - Nenhuma imagem externa: tudo desenhado por código no carregamento.
 
 ## Stack
@@ -36,8 +36,8 @@ src/sim/                     lógica pura: ball, player, physics, possession, co
                              tackle, ai, goalkeeper, match, penalties, kits, command
 src/art/                     desenho procedural das texturas
 src/render/                  sprites Phaser que espelham a simulação
-src/scenes/                  Boot, Title, MainMenu, TeamSelect, Versus, Match, Pause, Result
-src/audio/AudioManager.ts    stub vazio
+src/scenes/                  Boot, Title, MainMenu, TeamSelect, Versus, Match, Pause, Result, Overlay
+src/audio/                   AudioManager (Web Audio), synth (os 5 sons), settings, voices
 tests/
 ```
 
@@ -93,7 +93,7 @@ tests/
 PAL, COR, BAR, RMA, INT, MIL, LIV, CHE — uniformes fiéis (titular e reserva), escudos só em contorno com marcas leves. `sim/kits.ts`: cor de leitura; conflito → J2 reserva, ainda conflita → J1 reserva; mesmo time → J2 reserva. Escolha manual na seleção (`chooseKitsWith`): vale se a combinação não conflitar; quem está no automático se ajusta; escolha conflitante é recusada; mudar de time volta ao automático. Testes obrigatórios: COR×RMA, BAR×INT, MIL×LIV trocam; PAL×COR não. Goleiros: cores (laranja, verde-limão, cinza, rosa, amarelo, preto) maximizando diferença.
 
 ## Telas
-Título (bola de futebol de pentágonos quicando) → Menu principal (modos) → Seleção (J1 esquerda / J2 direita, confirmar/desfazer; prévia do uniforme sem a linha que ferve, só respiração e balanço suaves) → VS (2,5 s, clima sorteado) → Partida → Pausa (Continuar, Reiniciar, Efeitos de filme, Sair) → Resultado (Revanche, Trocar times, Menu principal).
+Título (bola de futebol de pentágonos quicando) → Menu principal (modos) → Seleção (J1 esquerda / J2 direita, confirmar/desfazer; prévia do uniforme sem a linha que ferve, só respiração e balanço suaves) → VS (2,5 s, clima sorteado) → Partida → Pausa (Continuar, Reiniciar, Efeitos de filme, Volume, Som, Sair) → Resultado (Revanche, Trocar times, Menu principal).
 
 ## Fases
 1. Base (Vite + TS + Phaser + Vitest + deploy) · 2. Campo e projeção (+ debug com `` ` ``) · 3. Entrada e movimento · 4. Bola (física, posse, passe, chute) · 5. Gol e fluxo da partida · 6. Troca automática + indicador · 7. Dividida · 8. IA de linha e goleiros · 9. Pênaltis · 10. Arte dos jogadores e bola · 11. Estádio, torcida, placas, climas · 12. Interface · 13. Efeitos · 14. Menus · 15. Polimento e deploy final.
@@ -105,6 +105,7 @@ Expansão: 16. Menu principal e refatoração dos modos (`GameMode`, `CommandSou
 - **Comandos** (`sim/command.ts`, puro): a simulação recebe um `TeamCommand` por time e por tick (`moveX`/`moveY` normalizados, `passPressed`, `shootHeld`, `shootReleased`, `shootPressed`); `HumanInputs = [TeamCommand, TeamCommand]` e a sim não importa mais `core/input`. Quem comanda é um `CommandSource` (`getCommand(tick)`); `isValidCommand` confere o que vier de fora. Campo opcional `aimDir` (-1/0/1): a mira do pênalti lida das teclas cruas pelas fontes de teclado (esquerda ou cima = -1, direita ou baixo = +1, as duas = 0), porque o direcional normalizado perde W+S+A (vira "esquerda", mas o cursor ficava parado); sem ele (CPU), a mira sai do direcional.
 - **Fontes de teclado** (`core/sources.ts`): `KeyboardTickSampler` (um `snapshot` por tick; a partida lê pausa, debug e blur do mesmo quadro; `reset()` ao voltar da pausa, senão o quadro guardado reabriria a pausa), `LocalKeyboardSource(sampler, 0|1)` (um conjunto, igual ao mapeamento antigo) e `CombinedKeyboardSource` (os dois conjuntos para um jogador: opostas se anulam; F ou ; passa; G ou . é um botão lógico de chute). A `MatchScene` conta os ticks e monta as fontes pelo modo (`createSources`): local = `[Local(0), Local(1)]`; solo = `[Combined, CpuSource]` (fase 18); online nas fases 20/21.
 - **Menu principal** (`MainMenuScene`): 1 JOGADOR — CAMPEONATO, 2 JOGADORES — LOCAL, ONLINE — SALA. Qualquer conjunto navega (W/S ou setas), F, ; ou Enter confirma, G ou . volta ao título. Voltar da seleção, "SAIR PARA O MENU" da pausa e "MENU PRINCIPAL" do resultado levam a ele. Modo ainda não ligado aparece esmaecido com o carimbo "EM BREVE" e confirmar nele não faz nada.
+- **Som** (fase 17): `sim/sound.ts` (puro) transforma os eventos de cada passo em `SoundEvent` (`kick` com a força, `pass`, `whistle` com padrão `short`/`double`/`final`, `goal`, `save`; `x` = X da bola; `id` crescente): `stepMatch` anota quantos eventos havia, roda o passo (`advanceMatch`) e converte só os novos (por isso `setupKickoff` tira só o último evento de posse com `pop`). Apito: 1 curto na saída de bola e antes de cada pênalti, 2 curtos no fim de um tempo, 3 (o último longo) no fim de jogo — fim do 2º tempo com vencedor dá só os 3. A `MatchScene` drena `drainSounds` e chama `audio.playSound`. `AudioManager`: um `AudioContext` criado/retomado no primeiro `keydown`/`pointerdown`/`touchend` (captura na janela); cadeia voz → ganho → `StereoPanner` (±`AUDIO_PAN_MAX` pelo X) → passa-altas 150 Hz → passa-baixas 6 kHz → master (volume²) → proteção contra estouro (WaveShaper linear até `AUDIO_CLIP_KNEE`, curva tanh até 1 com `AUDIO_CLIP_HEADROOM`; medido: vários sons fortes juntos a 100% passavam de 1,6) → saída. `VoiceLimiter`: no máximo 2 vozes do mesmo tipo (corta a mais antiga com rampa curta). Tudo em try/catch (erro vira um `console.warn` só). Volume (passos de 10%) e mudo: tecla M em qualquer tela (`audio.hotkeyEnabled` desliga, para digitar código de sala) e opções VOLUME (A/D ou ←/→) e SOM na pausa; preferência em `localStorage` (`derby-pvp-som`, try/catch). `OverlayScene` (última da lista, lançada no Boot) mostra o aviso "SOM LIGADO · 80% (M)" / "SOM DESLIGADO (M)". Sons de interface (`audio.play('menu-…')`) ficam mudos nesta versão. Com `?debug`, o áudio fica em `window.derbyAudio`.
 - **Decisões do usuário** (2026-10-13): no solo, a pausa troca "SAIR PARA O MENU" por "ABANDONAR CAMPEONATO" (com confirmação); no solo e no online os uniformes são só os da regra automática (`chooseKits`), H/vírgula só no local; push/deploy só no fim da fase 22.
 
 ## Decisões técnicas registradas
