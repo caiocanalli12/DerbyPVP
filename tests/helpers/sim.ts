@@ -1,41 +1,47 @@
-import { emptyPlayerInput } from '../../src/core/input';
-import type { PlayerInput } from '../../src/core/input';
 import { SIM_DT } from '../../src/config/constants';
+import { emptyCommand } from '../../src/sim/command';
+import type { TeamCommand } from '../../src/sim/command';
 import { stepWorld } from '../../src/sim/world';
 import type { HumanInputs, World } from '../../src/sim/world';
 
-export function idle(): PlayerInput {
-  return emptyPlayerInput();
+export function idle(): TeamCommand {
+  return emptyCommand();
 }
 
-export function move(x: number, y: number): PlayerInput {
-  const i = emptyPlayerInput();
+export function move(x: number, y: number): TeamCommand {
+  const i = emptyCommand();
   const l = Math.hypot(x, y);
   i.moveX = l > 0 ? x / l : 0;
   i.moveY = l > 0 ? y / l : 0;
   return i;
 }
 
-/** Entrada com botões: pass/shoot = 'tap' (aperta e solta no mesmo passo), 'press', 'hold', 'release'. */
+/** Comando com botões: pass/shoot = 'tap' (aperta e solta no mesmo passo), 'press', 'hold', 'release'. */
 export type BtnAction = 'tap' | 'press' | 'hold' | 'release' | 'none';
 
-export function withButtons(base: PlayerInput, pass: BtnAction = 'none', shoot: BtnAction = 'none'): PlayerInput {
-  const i: PlayerInput = { ...base, pass: btn(pass), shoot: btn(shoot) };
-  return i;
+export function withButtons(base: TeamCommand, pass: BtnAction = 'none', shoot: BtnAction = 'none'): TeamCommand {
+  const s = btn(shoot);
+  return {
+    ...base,
+    passPressed: btn(pass).pressed,
+    shootHeld: s.held,
+    shootReleased: s.released,
+    shootPressed: s.pressed,
+  };
 }
 
-function btn(a: BtnAction): { down: boolean; pressed: boolean; released: boolean } {
+function btn(a: BtnAction): { held: boolean; pressed: boolean; released: boolean } {
   switch (a) {
     case 'tap':
-      return { down: false, pressed: true, released: true };
+      return { held: false, pressed: true, released: true };
     case 'press':
-      return { down: true, pressed: true, released: false };
+      return { held: true, pressed: true, released: false };
     case 'hold':
-      return { down: true, pressed: false, released: false };
+      return { held: true, pressed: false, released: false };
     case 'release':
-      return { down: false, pressed: false, released: true };
+      return { held: false, pressed: false, released: true };
     default:
-      return { down: false, pressed: false, released: false };
+      return { held: false, pressed: false, released: false };
   }
 }
 

@@ -8,8 +8,8 @@ import {
   KICKOFF_PASS_DEADLINE,
   SIM_DT,
 } from '../src/config/constants';
-import { emptyPlayerInput } from '../src/core/input';
-import type { PlayerInput } from '../src/core/input';
+import { emptyCommand } from '../src/sim/command';
+import type { TeamCommand } from '../src/sim/command';
 import { placeBall } from '../src/sim/ball';
 import { createMatch, formatClock, stepMatch, teamAttacking } from '../src/sim/match';
 import type { Match } from '../src/sim/match';
@@ -17,7 +17,7 @@ import { getPlayer, playerId } from '../src/sim/world';
 import type { HumanInputs } from '../src/sim/world';
 import { withButtons } from './helpers/sim';
 
-const IDLE: HumanInputs = [emptyPlayerInput(), emptyPlayerInput()];
+const IDLE: HumanInputs = [emptyCommand(), emptyCommand()];
 
 function run(m: Match, seconds: number, inputs: HumanInputs = IDLE): void {
   const n = Math.round(seconds / SIM_DT);
@@ -49,19 +49,16 @@ function scoreIn(m: Match, side: 0 | 1, lastTouchTeam: 0 | 1): void {
 }
 
 /** Entrada de um humano: direção e, opcionalmente, um toque no passe ou no chute. */
-function aim(x: number, y: number, button: 'pass' | 'shoot' | null = null): PlayerInput {
-  const i: PlayerInput = { ...emptyPlayerInput(), moveX: x, moveY: y };
-  const tap = { down: false, pressed: true, released: true };
-  if (button === 'pass') i.pass = tap;
-  if (button === 'shoot') i.shoot = tap;
-  return i;
+function aim(x: number, y: number, button: 'pass' | 'shoot' | null = null): TeamCommand {
+  const base: TeamCommand = { ...emptyCommand(), moveX: x, moveY: y };
+  return withButtons(base, button === 'pass' ? 'tap' : 'none', button === 'shoot' ? 'tap' : 'none');
 }
 
 /** Espera o apito da saída e dá o passe (para trás) com o time que sai. */
 function startPlaying(m: Match): void {
   runUntil(m, (mm) => mm.kickoffLive, 5);
-  const inputs: HumanInputs = [emptyPlayerInput(), emptyPlayerInput()];
-  inputs[m.kickoffTeam] = withButtons(emptyPlayerInput(), 'tap');
+  const inputs: HumanInputs = [emptyCommand(), emptyCommand()];
+  inputs[m.kickoffTeam] = withButtons(emptyCommand(), 'tap');
   stepMatch(m, inputs, SIM_DT);
   expect(m.phase).toBe('JOGANDO');
 }
@@ -115,19 +112,19 @@ describe('saída de bola', () => {
     const m = createMatch();
     // O J1 defende a esquerda: mirar no próprio campo é ter componente x <= 0.
     for (const [x, y] of [[1, 0], [1, 1], [1, -1], [0, 1], [-1, 1], [0, -1], [1, 0]] as const) {
-      run(m, 0.5, [aim(x, y), emptyPlayerInput()]);
+      run(m, 0.5, [aim(x, y), emptyCommand()]);
       expect(Math.cos(m.kickoffAim)).toBeLessThanOrEqual(1e-9);
     }
     // Para cima e para trás: mira entre o gol e a lateral de cima.
-    run(m, 0.5, [aim(-1, -1), emptyPlayerInput()]);
+    run(m, 0.5, [aim(-1, -1), emptyCommand()]);
     expect(Math.cos(m.kickoffAim)).toBeLessThan(-0.5);
     expect(Math.sin(m.kickoffAim)).toBeLessThan(-0.5);
   });
 
   it('o passe vai para um companheiro no próprio campo e põe a bola em jogo', () => {
     const m = createMatch();
-    run(m, KICKOFF_DELAY + 0.5, [aim(-1, -1), emptyPlayerInput()]);
-    stepMatch(m, [aim(-1, -1, 'pass'), emptyPlayerInput()], SIM_DT);
+    run(m, KICKOFF_DELAY + 0.5, [aim(-1, -1), emptyCommand()]);
+    stepMatch(m, [aim(-1, -1, 'pass'), emptyCommand()], SIM_DT);
     expect(m.phase).toBe('JOGANDO');
     const receiver = getPlayer(m.world, playerId(0, 'ALA_E'));
     expect(m.world.passLock?.receiver).toBe(receiver.id);
@@ -143,7 +140,7 @@ describe('saída de bola', () => {
   it('o chute não tira a bola na saída', () => {
     const m = createMatch();
     run(m, KICKOFF_DELAY + 0.2);
-    stepMatch(m, [aim(-1, 0, 'shoot'), emptyPlayerInput()], SIM_DT);
+    stepMatch(m, [aim(-1, 0, 'shoot'), emptyCommand()], SIM_DT);
     run(m, 0.3);
     expect(m.phase).toBe('SAIDA_DE_BOLA');
     expect(m.world.ball.owner).toBe(playerId(0, 'ATA'));
@@ -165,9 +162,9 @@ describe('saída de bola', () => {
     startPlaying(m);
     scoreIn(m, 1, 0);
     runUntil(m, (mm) => mm.phase === 'SAIDA_DE_BOLA', 5);
-    run(m, KICKOFF_DELAY + 0.5, [emptyPlayerInput(), aim(-1, 0)]);
+    run(m, KICKOFF_DELAY + 0.5, [emptyCommand(), aim(-1, 0)]);
     expect(Math.cos(m.kickoffAim)).toBeGreaterThanOrEqual(-1e-9);
-    stepMatch(m, [emptyPlayerInput(), aim(-1, 0, 'pass')], SIM_DT);
+    stepMatch(m, [emptyCommand(), aim(-1, 0, 'pass')], SIM_DT);
     expect(m.phase).toBe('JOGANDO');
     expect(m.world.ball.vx).toBeGreaterThan(0);
   });
@@ -228,7 +225,7 @@ describe('gol', () => {
     const m = createMatch();
     startPlaying(m);
     scoreIn(m, 1, 0);
-    const skip: HumanInputs = [emptyPlayerInput(), withButtons(emptyPlayerInput(), 'tap')];
+    const skip: HumanInputs = [emptyCommand(), withButtons(emptyCommand(), 'tap')];
     stepMatch(m, skip, SIM_DT);
     expect(m.phase).toBe('COMEMORACAO_GOL');
     run(m, 1);

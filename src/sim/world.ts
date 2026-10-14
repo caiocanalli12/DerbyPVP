@@ -8,7 +8,6 @@ import {
   PLAYER_RUN_SPEED,
   POSSESSION_MAX_Z,
 } from '../config/constants';
-import type { PlayerInput } from '../core/input';
 import { Rng } from '../core/rng';
 import {
   ballSpeed,
@@ -20,6 +19,7 @@ import {
   substepsFor,
 } from './ball';
 import type { Ball } from './ball';
+import type { TeamCommand } from './command';
 import { cancelCharge, createHumanState, handleHumanActions, setControlled, updateAutoControl } from './control';
 import type { HumanState } from './control';
 import type { SimEvent } from './events';
@@ -80,8 +80,8 @@ export interface World {
   rng: Rng;
 }
 
-/** Entrada humana por passo (só o que a simulação precisa). */
-export type HumanInputs = [PlayerInput, PlayerInput];
+/** Comando de cada time por passo (de qualquer fonte: teclado, CPU ou jogador remoto). */
+export type HumanInputs = [TeamCommand, TeamCommand];
 
 export function createWorld(seed = 1): World {
   const players: Player[] = [];

@@ -1,6 +1,6 @@
 # Derby PVP — referência do projeto
 
-Jogo de futebol 5x5 para navegador, 2 jogadores locais no mesmo teclado, visual de desenho animado dos anos 1930 (rubber hose / Cuphead). A especificação completa e original está em `prompt-derby-pvp.md` — **ela manda**; este arquivo é o resumo de trabalho. Na dúvida ou se algo for impossível: parar e perguntar, não inventar.
+Jogo de futebol 5x5 para navegador, 2 jogadores locais no mesmo teclado, visual de desenho animado dos anos 1930 (rubber hose / Cuphead). A especificação completa e original está em `prompt-derby-pvp.md` e a da expansão (modos solo e online, som) em `prompt-derby-pvp-expansao.md` — **elas mandam**; este arquivo é o resumo de trabalho. Na dúvida ou se algo for impossível: parar e perguntar, não inventar.
 
 ## Regras de trabalho
 
@@ -29,12 +29,14 @@ src/data/teams.ts            8 times (nomes, siglas, uniformes, escudos)
 src/data/sponsors.ts         placas de patrocínio
 src/core/projection.ts       mundo -> tela (única fonte da perspectiva)
 src/core/input.ts            teclado dos 2 jogadores
+src/core/sources.ts          fontes de comando do teclado (por tick)
+src/core/modes.ts            GameMode
 src/core/rng.ts              RNG com seed
 src/sim/                     lógica pura: ball, player, physics, possession, control,
-                             tackle, ai, goalkeeper, match, penalties, kits
+                             tackle, ai, goalkeeper, match, penalties, kits, command
 src/art/                     desenho procedural das texturas
 src/render/                  sprites Phaser que espelham a simulação
-src/scenes/                  Boot, Title, TeamSelect, Versus, Match, Pause, Result
+src/scenes/                  Boot, Title, MainMenu, TeamSelect, Versus, Match, Pause, Result
 src/audio/AudioManager.ts    stub vazio
 tests/
 ```
@@ -91,10 +93,19 @@ tests/
 PAL, COR, BAR, RMA, INT, MIL, LIV, CHE — uniformes fiéis (titular e reserva), escudos só em contorno com marcas leves. `sim/kits.ts`: cor de leitura; conflito → J2 reserva, ainda conflita → J1 reserva; mesmo time → J2 reserva. Escolha manual na seleção (`chooseKitsWith`): vale se a combinação não conflitar; quem está no automático se ajusta; escolha conflitante é recusada; mudar de time volta ao automático. Testes obrigatórios: COR×RMA, BAR×INT, MIL×LIV trocam; PAL×COR não. Goleiros: cores (laranja, verde-limão, cinza, rosa, amarelo, preto) maximizando diferença.
 
 ## Telas
-Título (bola de futebol de pentágonos quicando) → Seleção (J1 esquerda / J2 direita, confirmar/desfazer; prévia do uniforme sem a linha que ferve, só respiração e balanço suaves) → VS (2,5 s, clima sorteado) → Partida → Pausa (Continuar, Reiniciar, Efeitos de filme, Sair) → Resultado (Revanche, Trocar times, Menu).
+Título (bola de futebol de pentágonos quicando) → Menu principal (modos) → Seleção (J1 esquerda / J2 direita, confirmar/desfazer; prévia do uniforme sem a linha que ferve, só respiração e balanço suaves) → VS (2,5 s, clima sorteado) → Partida → Pausa (Continuar, Reiniciar, Efeitos de filme, Sair) → Resultado (Revanche, Trocar times, Menu principal).
 
 ## Fases
 1. Base (Vite + TS + Phaser + Vitest + deploy) · 2. Campo e projeção (+ debug com `` ` ``) · 3. Entrada e movimento · 4. Bola (física, posse, passe, chute) · 5. Gol e fluxo da partida · 6. Troca automática + indicador · 7. Dividida · 8. IA de linha e goleiros · 9. Pênaltis · 10. Arte dos jogadores e bola · 11. Estádio, torcida, placas, climas · 12. Interface · 13. Efeitos · 14. Menus · 15. Polimento e deploy final.
+
+Expansão: 16. Menu principal e refatoração dos modos (`GameMode`, `CommandSource`, `CombinedKeyboardSource`) · 17. Efeitos sonoros · 18. CPU do adversário · 19. Campeonato · 20. Online, conexão · 21. Online, partida · 22. Polimento e deploy.
+
+## Expansão (fases 16–22)
+- **Modos** (`core/modes.ts`): `GameMode = 'solo' | 'local' | 'online'`, passado entre as cenas (`MatchConfig.mode`; sem modo, inclusive no atalho `?t1=..&t2=..`, vale `'local'`). Uma só `MatchScene` para os três, sem duplicar a partida. O modo local continua idêntico.
+- **Comandos** (`sim/command.ts`, puro): a simulação recebe um `TeamCommand` por time e por tick (`moveX`/`moveY` normalizados, `passPressed`, `shootHeld`, `shootReleased`, `shootPressed`); `HumanInputs = [TeamCommand, TeamCommand]` e a sim não importa mais `core/input`. Quem comanda é um `CommandSource` (`getCommand(tick)`); `isValidCommand` confere o que vier de fora. Campo opcional `aimDir` (-1/0/1): a mira do pênalti lida das teclas cruas pelas fontes de teclado (esquerda ou cima = -1, direita ou baixo = +1, as duas = 0), porque o direcional normalizado perde W+S+A (vira "esquerda", mas o cursor ficava parado); sem ele (CPU), a mira sai do direcional.
+- **Fontes de teclado** (`core/sources.ts`): `KeyboardTickSampler` (um `snapshot` por tick; a partida lê pausa, debug e blur do mesmo quadro; `reset()` ao voltar da pausa, senão o quadro guardado reabriria a pausa), `LocalKeyboardSource(sampler, 0|1)` (um conjunto, igual ao mapeamento antigo) e `CombinedKeyboardSource` (os dois conjuntos para um jogador: opostas se anulam; F ou ; passa; G ou . é um botão lógico de chute). A `MatchScene` conta os ticks e monta as fontes pelo modo (`createSources`): local = `[Local(0), Local(1)]`; solo = `[Combined, CpuSource]` (fase 18); online nas fases 20/21.
+- **Menu principal** (`MainMenuScene`): 1 JOGADOR — CAMPEONATO, 2 JOGADORES — LOCAL, ONLINE — SALA. Qualquer conjunto navega (W/S ou setas), F, ; ou Enter confirma, G ou . volta ao título. Voltar da seleção, "SAIR PARA O MENU" da pausa e "MENU PRINCIPAL" do resultado levam a ele. Modo ainda não ligado aparece esmaecido com o carimbo "EM BREVE" e confirmar nele não faz nada.
+- **Decisões do usuário** (2026-10-13): no solo, a pausa troca "SAIR PARA O MENU" por "ABANDONAR CAMPEONATO" (com confirmação); no solo e no online os uniformes são só os da regra automática (`chooseKits`), H/vírgula só no local; push/deploy só no fim da fase 22.
 
 ## Decisões técnicas registradas
 - Texturas procedurais são desenhadas com a API Canvas 2D (num canvas registrado como textura do Phaser) geradas no carregamento: o `Graphics` do Phaser não tem recorte (clip), gradiente no modo canvas nem texto com fonte, que são necessários para listras de uniforme, céu e placas. Continua 100% desenhado por código, sem imagens externas.

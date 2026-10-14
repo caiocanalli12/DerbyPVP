@@ -11,6 +11,9 @@ import {
 } from '../config/constants';
 import { isTackleActive, tackleFootTip } from '../sim/tackle';
 import { keyboard } from '../core/input';
+import type { GameMode } from '../core/modes';
+import { KeyboardTickSampler, LocalKeyboardSource } from '../core/sources';
+import type { CommandSource } from '../sim/command';
 import { DEPTH_UI } from '../core/projection';
 import { audio } from '../audio/AudioManager';
 import { BallView } from '../render/BallView';
@@ -48,6 +51,7 @@ import { goalsOf } from '../sim/penalties';
 import { PAUSE_EVENTS } from './PauseScene';
 import type { Match } from '../sim/match';
 import { drainEvents, getPlayer } from '../sim/world';
+import type { HumanInputs } from '../sim/world';
 import { CREAM_CSS, FONT_TITLE } from '../art/style';
 
 /** Configuração de uma partida (vem da seleção de times e da tela VS). */
@@ -57,6 +61,19 @@ export interface MatchConfig {
   weather: WeatherId;
   /** Uniformes escolhidos na seleção (sem isso, a regra automática). */
   kits?: [KitVariant, KitVariant];
+  /** Modo de jogo (sem isso, 'local'). */
+  mode: GameMode;
+}
+
+/** Fontes de comando de cada time conforme o modo (a partida é a mesma nos três). */
+function createSources(mode: GameMode, sampler: KeyboardTickSampler): [CommandSource, CommandSource] {
+  switch (mode) {
+    case 'local':
+      return [new LocalKeyboardSource(sampler, 0), new LocalKeyboardSource(sampler, 1)];
+    case 'solo':
+    case 'online':
+      throw new Error(`modo ainda não disponível: ${mode}`);
+  }
 }
 
 /**
@@ -88,6 +105,10 @@ export class MatchScene extends Phaser.Scene {
   private goalText!: GoalTextView;
   private film!: FilmView;
   private accumulator = 0;
+  /** Passo fixo atual (as fontes de comando respondem por tick). */
+  private tick = 0;
+  private sampler!: KeyboardTickSampler;
+  private sources!: [CommandSource, CommandSource];
   private skipDelta = false;
   private finished = false;
 
@@ -108,12 +129,16 @@ export class MatchScene extends Phaser.Scene {
       seed,
       weather: data.weather ?? (w && isWeatherId(w) ? w : randomWeather(() => rng.next())),
       kits: data.kits,
+      mode: data.mode ?? 'local',
     };
   }
 
   create(): void {
     this.ready = false;
     this.loading = null;
+    this.tick = 0;
+    this.sampler = new KeyboardTickSampler();
+    this.sources = createSources(this.config.mode, this.sampler);
     const [t1, t2] = this.config.teams;
     this.kits = this.config.kits ? kitChoiceFor(t1, t2, this.config.kits) : chooseKits(t1, t2);
     // A semente da arte fica fixa (revanche reaproveita as texturas); a da partida varia.
@@ -194,6 +219,7 @@ export class MatchScene extends Phaser.Scene {
 
     // Descarta teclas apertadas antes da partida começar.
     keyboard.snapshot();
+    this.sampler.reset();
     this.ready = true;
     this.finished = false;
     this.game.events.on(PAUSE_EVENTS.resume, this.onResume, this);
@@ -238,13 +264,15 @@ export class MatchScene extends Phaser.Scene {
 
     this.accumulator += frameDt;
     while (this.accumulator >= SIM_DT) {
-      const frame = keyboard.snapshot();
+      const frame = this.sampler.frame(this.tick);
       if (frame.debug.pressed) this.debug.toggle();
       if ((frame.blurred || frame.pause.pressed) && !this.finished) {
         this.openPause();
         return;
       }
-      stepMatch(this.match, frame.players, SIM_DT);
+      const commands: HumanInputs = [this.sources[0].getCommand(this.tick), this.sources[1].getCommand(this.tick)];
+      stepMatch(this.match, commands, SIM_DT);
+      this.tick++;
       this.accumulator -= SIM_DT;
     }
 
@@ -283,8 +311,10 @@ export class MatchScene extends Phaser.Scene {
   }
 
   private onResume(): void {
-    // Teclas apertadas durante a pausa não valem na partida.
+    // Teclas apertadas durante a pausa não valem na partida. O quadro do tick em que a pausa
+    // abriu (com a pausa apertada) é esquecido, senão a reabriria.
     keyboard.snapshot();
+    this.sampler.reset();
     this.accumulator = 0;
     this.skipDelta = true;
   }

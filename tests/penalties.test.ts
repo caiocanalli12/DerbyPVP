@@ -6,8 +6,10 @@ import {
   PEN_TIME_LIMIT,
   SIM_DT,
 } from '../src/config/constants';
-import { emptyPlayerInput } from '../src/core/input';
+import { directionFromKeys, KeyboardInput } from '../src/core/input';
+import { KeyboardTickSampler, LocalKeyboardSource } from '../src/core/sources';
 import { Rng } from '../src/core/rng';
+import { emptyCommand } from '../src/sim/command';
 import { createMatch, matchWinner, stepMatch } from '../src/sim/match';
 import type { Match } from '../src/sim/match';
 import {
@@ -24,7 +26,7 @@ import {
 } from '../src/sim/penalties';
 import type { PenaltyAttempt, PenaltyResult } from '../src/sim/penalties';
 import type { HumanInputs } from '../src/sim/world';
-import { withButtons } from './helpers/sim';
+import { move, withButtons } from './helpers/sim';
 
 const G: PenaltyResult = 'goal';
 const X: PenaltyResult = 'saved';
@@ -202,12 +204,42 @@ describe('mira e prazo', () => {
 
   it('esquerda/direita movem o cursor, limitado à boca do gol', () => {
     const a = attempt();
-    const right = { ...emptyPlayerInput(), right: { down: true, pressed: false, released: false } };
+    const right = move(1, 0);
     for (let i = 0; i < 120; i++) updateAiming(a, right, SIM_DT);
     expect(a.cursor).toBeCloseTo(PEN_CURSOR_LIMIT, 6);
-    const left = { ...emptyPlayerInput(), left: { down: true, pressed: false, released: false } };
+    const left = move(-1, 0);
     for (let i = 0; i < 30; i++) updateAiming(a, left, SIM_DT);
     expect(a.cursor).toBeLessThan(PEN_CURSOR_LIMIT);
+  });
+
+  it('as teclas mexem o cursor como antes (esquerda ou cima / direita ou baixo), em todas as combinações', () => {
+    // Pelo caminho real do modo local: teclado -> LocalKeyboardSource -> updateAiming.
+    const codes = ['KeyW', 'KeyS', 'KeyA', 'KeyD'];
+    for (let mask = 0; mask < 16; mask++) {
+      const keys = [1, 2, 4, 8].map((bit) => (mask & bit) !== 0);
+      const [up, down, left, right] = keys as [boolean, boolean, boolean, boolean];
+      const expected = (right || down ? 1 : 0) - (left || up ? 1 : 0);
+      const kb = new KeyboardInput();
+      codes.forEach((code, i) => {
+        if (keys[i]) kb.keyDown({ code, key: '', preventDefault() {} });
+      });
+      const command = new LocalKeyboardSource(new KeyboardTickSampler(kb), 0).getCommand(0);
+      const a = attempt();
+      updateAiming(a, command, SIM_DT);
+      expect(a.cursor > 0 ? 1 : a.cursor < 0 ? -1 : 0, `máscara ${mask}`).toBe(expected);
+    }
+  });
+
+  it('sem aimDir (CPU, testes), a mira sai do direcional', () => {
+    for (let mask = 0; mask < 16; mask++) {
+      const keys = [1, 2, 4, 8].map((bit) => (mask & bit) !== 0);
+      const [up, down, left, right] = keys as [boolean, boolean, boolean, boolean];
+      const d = directionFromKeys(up, down, left, right);
+      const expected = (d.x > 0 || d.y > 0 ? 1 : 0) - (d.x < 0 || d.y < 0 ? 1 : 0);
+      const a = attempt();
+      updateAiming(a, { ...emptyCommand(), moveX: d.x, moveY: d.y }, SIM_DT);
+      expect(a.cursor > 0 ? 1 : a.cursor < 0 ? -1 : 0).toBe(expected);
+    }
   });
 
   it('o cursor balança sozinho (cantos extremos ficam arriscados)', () => {
@@ -218,9 +250,9 @@ describe('mira e prazo', () => {
 
   it('segurar carrega; soltar chuta com a força carregada', () => {
     const a = attempt();
-    expect(updateAiming(a, withButtons(emptyPlayerInput(), 'none', 'press'), SIM_DT)).toBeNull();
-    for (let i = 0; i < 27; i++) updateAiming(a, withButtons(emptyPlayerInput(), 'none', 'hold'), SIM_DT);
-    const power = updateAiming(a, withButtons(emptyPlayerInput(), 'none', 'release'), SIM_DT);
+    expect(updateAiming(a, withButtons(emptyCommand(), 'none', 'press'), SIM_DT)).toBeNull();
+    for (let i = 0; i < 27; i++) updateAiming(a, withButtons(emptyCommand(), 'none', 'hold'), SIM_DT);
+    const power = updateAiming(a, withButtons(emptyCommand(), 'none', 'release'), SIM_DT);
     expect(power).not.toBeNull();
     expect(power!).toBeCloseTo(0.5, 1);
   });
@@ -230,7 +262,7 @@ describe('mira e prazo', () => {
     let power: number | null = null;
     let t = 0;
     while (power === null && t < PEN_TIME_LIMIT + 1) {
-      power = updateAiming(a, emptyPlayerInput(), SIM_DT);
+      power = updateAiming(a, emptyCommand(), SIM_DT);
       t += SIM_DT;
     }
     expect(power).toBe(0);
@@ -242,7 +274,7 @@ describe('disputa completa na partida', () => {
   function toPenalties(): Match {
     const m = createMatch(21);
     m.world.aiEnabled = false;
-    const idle: HumanInputs = [emptyPlayerInput(), emptyPlayerInput()];
+    const idle: HumanInputs = [emptyCommand(), emptyCommand()];
     for (let i = 0; i < 400 / SIM_DT && m.phase !== 'PENALTIS'; i++) stepMatch(m, idle, SIM_DT);
     expect(m.phase).toBe('PENALTIS');
     return m;
@@ -255,11 +287,11 @@ describe('disputa completa na partida', () => {
     const kickers: string[] = [];
     while (!m.over && i < 200 / SIM_DT) {
       const a = m.attempt;
-      const inputs: HumanInputs = [emptyPlayerInput(), emptyPlayerInput()];
+      const inputs: HumanInputs = [emptyCommand(), emptyCommand()];
       if (a && a.phase === 'aiming') {
         const phase = Math.floor(a.aimTime / SIM_DT);
         const btn = phase === 10 ? 'press' : phase > 10 && phase < 50 ? 'hold' : phase === 50 ? 'release' : 'none';
-        inputs[a.team] = withButtons({ ...emptyPlayerInput(), right: { down: (i >> 6) % 2 === 0, pressed: false, released: false } }, 'none', btn);
+        inputs[a.team] = withButtons(move((i >> 6) % 2 === 0 ? 1 : 0, 0), 'none', btn);
         if (phase === 0) kickers.push(`${a.team}:${m.world.players[a.kicker]!.role}`);
       }
       stepMatch(m, inputs, SIM_DT);

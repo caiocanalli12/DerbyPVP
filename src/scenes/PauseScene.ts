@@ -98,7 +98,7 @@ export class PauseScene extends Phaser.Scene {
       case 3:
         this.closing = true;
         this.scene.stop('MatchScene');
-        this.scene.start('TitleScene');
+        this.scene.start('MainMenuScene');
         break;
     }
   }

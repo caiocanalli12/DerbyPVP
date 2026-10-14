@@ -14,7 +14,7 @@ import {
   PASS_RECEIVER_LOCK_EXTRA,
   SHOT_CHARGE_TIME,
 } from '../config/constants';
-import type { PlayerInput } from '../core/input';
+import type { TeamCommand } from './command';
 import { choosePassTarget, planPass, releaseBall, shotVelocity } from './kick';
 import { startTackle } from './tackle';
 import type { Player, TeamIndex } from './player';
@@ -108,7 +108,7 @@ export function updateAutoControl(world: World, team: TeamIndex, dt: number): vo
 }
 
 /** Direção de ação: o direcional, ou para onde o jogador está virado. */
-function actionDirection(p: Player, input: PlayerInput): { x: number; y: number } {
+function actionDirection(p: Player, input: TeamCommand): { x: number; y: number } {
   if (input.moveX !== 0 || input.moveY !== 0) return { x: input.moveX, y: input.moveY };
   return { x: Math.cos(p.facing), y: Math.sin(p.facing) };
 }
@@ -136,7 +136,7 @@ export function performPass(world: World, p: Player, dirX: number, dirY: number)
 }
 
 /** Executa um chute do jogador `p` com a carga dada. */
-export function performShot(world: World, p: Player, charge: number, input: PlayerInput): void {
+export function performShot(world: World, p: Player, charge: number, input: TeamCommand): void {
   const ball = world.ball;
   const dir = input.moveX !== 0 || input.moveY !== 0 ? { x: input.moveX, y: input.moveY } : null;
   const goal = world.defends[p.team === 0 ? 1 : 0];
@@ -149,7 +149,7 @@ export function performShot(world: World, p: Player, charge: number, input: Play
  * Ações do jogador controlado pelo humano `team` neste passo.
  * Com a bola: passe (F / ;) ou carga e chute (G / .). Sem a bola: chute = dividida.
  */
-export function handleHumanActions(world: World, team: TeamIndex, input: PlayerInput, dt: number): void {
+export function handleHumanActions(world: World, team: TeamIndex, input: TeamCommand, dt: number): void {
   const h = world.humans[team];
   const p = getPlayer(world, world.controlled[team]);
   const hasBall = world.ball.owner === p.id;
@@ -161,25 +161,25 @@ export function handleHumanActions(world: World, team: TeamIndex, input: PlayerI
 
   if (!hasBall) {
     // Chute sem a bola = dividida.
-    if (input.shoot.pressed && startTackle(p, input.moveX, input.moveY)) {
+    if (input.shootPressed && startTackle(p, input.moveX, input.moveY)) {
       world.events.push({ type: 'tackleStart', player: p.id });
     }
     return;
   }
 
-  if (!h.charging && input.pass.pressed) {
+  if (!h.charging && input.passPressed) {
     const d = actionDirection(p, input);
     performPass(world, p, d.x, d.y);
     return;
   }
 
-  if (!h.charging && input.shoot.pressed) {
+  if (!h.charging && input.shootPressed) {
     h.charging = true;
     h.charge = 0;
   }
   if (!h.charging) return;
 
-  if (input.shoot.down) {
+  if (input.shootHeld) {
     h.charge = Math.min(1, h.charge + dt / SHOT_CHARGE_TIME);
     return;
   }

@@ -2,15 +2,15 @@
  * Cenários de chute contra o goleiro (time 1 defende o gol da direita).
  */
 import { SIM_DT } from '../../src/config/constants';
-import { emptyPlayerInput } from '../../src/core/input';
 import { Rng } from '../../src/core/rng';
+import { emptyCommand } from '../../src/sim/command';
 import { releaseBall, shotVelocity } from '../../src/sim/kick';
 import { createWorld, getPlayer, givePossession, playerId, stepWorld } from '../../src/sim/world';
 import type { HumanInputs, World } from '../../src/sim/world';
 
 export type ShotOutcome = 'goal' | 'catch' | 'parry' | 'other';
 
-const IDLE: HumanInputs = [emptyPlayerInput(), emptyPlayerInput()];
+const IDLE: HumanInputs = [emptyCommand(), emptyCommand()];
 
 /** Jogadores de linha longe da jogada (perto do gol da esquerda). */
 function clearField(w: World): void {

@@ -216,6 +216,12 @@ export class DecoButton {
     this.text.setVisible(v);
   }
 
+  /** Transparência da placa e do rótulo (opções indisponíveis ficam esmaecidas). */
+  setAlpha(alpha: number): void {
+    this.plate.setAlpha(alpha);
+    this.text.setAlpha(alpha);
+  }
+
   destroy(): void {
     this.plate.destroy();
     this.text.destroy();

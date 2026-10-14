@@ -1,6 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { emptyPlayerInput } from '../src/core/input';
-import type { PlayerInput } from '../src/core/input';
 import {
   FIELD_LENGTH,
   FIELD_WIDTH,
@@ -12,9 +10,11 @@ import { clampToField, createPlayer, formationPosition, integrateMovement } from
 import { separatePlayers } from '../src/sim/physics';
 import { createWorld, getPlayer, stepWorld } from '../src/sim/world';
 import type { HumanInputs } from '../src/sim/world';
+import { emptyCommand } from '../src/sim/command';
+import type { TeamCommand } from '../src/sim/command';
 
-function input(x: number, y: number): PlayerInput {
-  const i = emptyPlayerInput();
+function input(x: number, y: number): TeamCommand {
+  const i = emptyCommand();
   const l = Math.hypot(x, y);
   i.moveX = l > 0 ? x / l : 0;
   i.moveY = l > 0 ? y / l : 0;

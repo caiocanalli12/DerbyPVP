@@ -26,8 +26,6 @@ import {
   KICKOFF_PASS_DEADLINE,
   PLAYER_TURN_RATE,
 } from '../config/constants';
-import { emptyPlayerInput } from '../core/input';
-import type { PlayerInput } from '../core/input';
 import { FIELD_CENTER_X, FIELD_CENTER_Y } from './field';
 import type { GoalSide } from './field';
 import type { Player, TeamIndex } from './player';
@@ -42,6 +40,8 @@ import {
   stepWorld,
 } from './world';
 import type { HumanInputs, World } from './world';
+import { emptyCommand } from './command';
+import type { TeamCommand } from './command';
 import { cancelCharge, passTo } from './control';
 import { choosePassTarget } from './kick';
 import { angleDiff, clamp } from './vec';
@@ -245,7 +245,7 @@ export function kickoffTarget(world: World, kicker: Player, aim: number): Player
  * Saída de bola depois do apito: ninguém se mexe; o batedor gira em volta da bola com o direcional,
  * mirando só o próprio campo, e o passe (ou o prazo) põe a bola em jogo.
  */
-function stepKickoff(match: Match, input: PlayerInput, dt: number): void {
+function stepKickoff(match: Match, input: TeamCommand, dt: number): void {
   const world = match.world;
   const team = match.kickoffTeam;
   const kicker = getPlayer(world, playerId(team, 'ATA'));
@@ -263,7 +263,7 @@ function stepKickoff(match: Match, input: PlayerInput, dt: number): void {
   placeKickoffTaker(kicker, match.kickoffAim);
 
   const late = match.phaseTimer >= KICKOFF_DELAY + KICKOFF_PASS_DEADLINE;
-  if (input.pass.pressed || late) {
+  if (input.passPressed || late) {
     passTo(world, kicker, kickoffTarget(world, kicker, match.kickoffAim));
     match.kickoffLive = false;
     match.phase = 'JOGANDO';
@@ -362,7 +362,7 @@ function registerGoal(match: Match, side: GoalSide): void {
   for (const h of world.humans) cancelCharge(h);
 }
 
-const IDLE_INPUTS: HumanInputs = [emptyPlayerInput(), emptyPlayerInput()];
+const IDLE_INPUTS: HumanInputs = [emptyCommand(), emptyCommand()];
 
 /** Avança a partida um passo fixo. */
 export function stepMatch(match: Match, inputs: HumanInputs, dt: number): void {
@@ -398,7 +398,7 @@ export function stepMatch(match: Match, inputs: HumanInputs, dt: number): void {
       // A bola continua na rede e os jogadores param; ninguém joga.
       stepWorld(world, IDLE_INPUTS, dt);
       const skip =
-        match.phaseTimer >= GOAL_CELEBRATION_SKIP_AFTER && (inputs[0].pass.pressed || inputs[1].pass.pressed);
+        match.phaseTimer >= GOAL_CELEBRATION_SKIP_AFTER && (inputs[0].passPressed || inputs[1].passPressed);
       if (skip || match.phaseTimer >= GOAL_CELEBRATION_DURATION) setupKickoff(match, match.kickoffTeam);
       break;
     }

@@ -345,7 +345,7 @@ export class TeamSelectScene extends Phaser.Scene {
           changed = true;
           audio.play('menu-voltar');
         } else if (!this.sides[0].confirmed && !this.sides[1].confirmed) {
-          this.leave('TitleScene', {});
+          this.leave('MainMenuScene', {});
         }
         return;
       }
@@ -387,7 +387,11 @@ export class TeamSelectScene extends Phaser.Scene {
     if (this.sides[0].confirmed && this.sides[1].confirmed) {
       this.readySince ??= t;
       if (t - this.readySince >= BOTH_READY_DELAY) {
-        this.leave('VersusScene', { teams: [this.teamOf(this.sides[0]), this.teamOf(this.sides[1])], kits: this.kits.variants });
+        this.leave('VersusScene', {
+          teams: [this.teamOf(this.sides[0]), this.teamOf(this.sides[1])],
+          kits: this.kits.variants,
+          mode: 'local',
+        });
       }
     } else {
       this.readySince = null;

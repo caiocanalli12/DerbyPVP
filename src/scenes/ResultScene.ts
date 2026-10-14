@@ -30,7 +30,7 @@ export interface ResultData {
 
 /**
  * Resultado: placar final (com pênaltis, se houver), vencedor em destaque com a torcida dele
- * comemorando, e as opções Revanche, Trocar times e Menu inicial.
+ * comemorando, e as opções Revanche, Trocar times e Menu principal.
  */
 export class ResultScene extends Phaser.Scene {
   private data_!: ResultData;
@@ -119,7 +119,7 @@ export class ResultScene extends Phaser.Scene {
       }
     }
 
-    this.list = new ButtonList(this, GAME_WIDTH / 2, 470, ['REVANCHE', 'TROCAR TIMES', 'MENU INICIAL'], 62, 10);
+    this.list = new ButtonList(this, GAME_WIDTH / 2, 470, ['REVANCHE', 'TROCAR TIMES', 'MENU PRINCIPAL'], 62, 10);
     this.film = new FilmView(this, filmEffectsEnabled(this));
     readMenuInput();
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.film.destroy());
@@ -147,8 +147,8 @@ export class ResultScene extends Phaser.Scene {
       this.cameras.main.fadeOut(220, 20, 12, 8);
       this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start(scene, data));
     };
-    if (chosen === 0) go('VersusScene', { teams: d.teams, seed: d.seed, kits: d.kits });
+    if (chosen === 0) go('VersusScene', { teams: d.teams, seed: d.seed, kits: d.kits, mode: 'local' });
     else if (chosen === 1) go('TeamSelectScene', { teams: d.teams, kits: d.kits });
-    else go('TitleScene', {});
+    else go('MainMenuScene', {});
   }
 }

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH, VERSUS_DURATION } from '../config/constants';
 import { Rng } from '../core/rng';
+import type { GameMode } from '../core/modes';
 import { audio } from '../audio/AudioManager';
 import { getTeam } from '../data/teams';
 import type { TeamId } from '../data/teams';
@@ -23,6 +24,8 @@ export interface VersusData {
   seed?: number;
   /** Uniformes escolhidos na seleção (sem isso, a regra automática). */
   kits?: [KitVariant, KitVariant];
+  /** Modo de jogo (sem isso, 'local'). */
+  mode?: GameMode;
 }
 
 /** Instante (s) do choque dos escudos e onde eles param (distância do centro). */
@@ -69,7 +72,7 @@ export class VersusScene extends Phaser.Scene {
     const seed = data.seed ?? (Date.now() >>> 0);
     const rng = new Rng((Date.now() ^ 0x5eed) >>> 0);
     const weather: WeatherId = randomWeather(() => rng.next());
-    this.config = { teams: data.teams, seed, weather, kits: data.kits };
+    this.config = { teams: data.teams, seed, weather, kits: data.kits, mode: data.mode ?? 'local' };
   }
 
   create(): void {

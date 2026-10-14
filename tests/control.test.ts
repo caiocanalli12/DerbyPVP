@@ -3,7 +3,7 @@ import { CONTROL_SWITCH_BACK_TIME, CONTROL_SWITCH_COOLDOWN, SIM_DT } from '../sr
 import { placeBall } from '../src/sim/ball';
 import { setControlled, updateAutoControl } from '../src/sim/control';
 import { createWorld, getPlayer, givePossession, playerId, stepWorld } from '../src/sim/world';
-import type { PlayerInput } from '../src/core/input';
+import type { TeamCommand } from '../src/sim/command';
 import type { World } from '../src/sim/world';
 import { clearPlayers, idle, move, steps, withButtons } from './helpers/sim';
 
@@ -165,7 +165,7 @@ describe('adversário conduzindo com dois defensores perto', () => {
    * O J2 conduz para o gol do J1 com zigue-zague; o FIXO e o ALA_E do J1 estão colados nele.
    * `j1` decide o que o J1 aperta a cada passo. Devolve as trocas [tempo, de, para] de controle.
    */
-  function play(seed: number, j1: (w: World) => PlayerInput): [number, number, number][] {
+  function play(seed: number, j1: (w: World) => TeamCommand): [number, number, number][] {
     const w = createWorld(seed);
     const carrier = getPlayer(w, playerId(1, 'ATA'));
     carrier.x = 24;
@@ -184,7 +184,7 @@ describe('adversário conduzindo com dois defensores perto', () => {
     return out;
   }
 
-  const chase = (w: World): PlayerInput => {
+  const chase = (w: World): TeamCommand => {
     const me = getPlayer(w, w.controlled[0]);
     return move(w.ball.x - me.x, w.ball.y - me.y);
   };

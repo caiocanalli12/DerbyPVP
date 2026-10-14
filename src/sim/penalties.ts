@@ -31,8 +31,8 @@ import {
   SHOT_MAX_SPEED,
   SHOT_MIN_SPEED,
 } from '../config/constants';
-import type { PlayerInput } from '../core/input';
 import type { Rng } from '../core/rng';
+import type { AimDir, TeamCommand } from './command';
 import type { Role, TeamIndex } from './player';
 import { lerp } from './vec';
 
@@ -198,23 +198,27 @@ export function effectiveAim(a: PenaltyAttempt): number {
   return a.cursor + cursorSway(a.aimTime);
 }
 
+/** Mira pelo direcional: esquerda ou cima = -1, direita ou baixo = +1 (as duas = 0). */
+export function aimDirFromMove(moveX: number, moveY: number): AimDir {
+  return ((moveX > 0 || moveY > 0 ? 1 : 0) - (moveX < 0 || moveY < 0 ? 1 : 0)) as AimDir;
+}
+
 /**
- * Atualiza a mira e a carga com a entrada do batedor. Esquerda (ou cima) move o cursor para
- * a esquerda do batedor; direita (ou baixo), para a direita. Devolve a força se chutou.
+ * Atualiza a mira e a carga com o comando do batedor. Esquerda (ou cima) move o cursor para
+ * a esquerda do batedor; direita (ou baixo), para a direita (`aimDir`, das teclas; sem ele, o
+ * direcional). Devolve a força se chutou.
  */
-export function updateAiming(a: PenaltyAttempt, input: PlayerInput, dt: number): number | null {
+export function updateAiming(a: PenaltyAttempt, input: TeamCommand, dt: number): number | null {
   a.aimTime += dt;
-  const left = input.left.down || input.up.down;
-  const right = input.right.down || input.down.down;
-  const dir = (right ? 1 : 0) - (left ? 1 : 0);
+  const dir = input.aimDir ?? aimDirFromMove(input.moveX, input.moveY);
   a.cursor = Math.max(-PEN_CURSOR_LIMIT, Math.min(PEN_CURSOR_LIMIT, a.cursor + dir * PEN_CURSOR_SPEED * dt));
 
-  if (!a.charging && input.shoot.pressed) {
+  if (!a.charging && input.shootPressed) {
     a.charging = true;
     a.charge = 0;
   }
   if (a.charging) {
-    if (input.shoot.down) a.charge = Math.min(1, a.charge + dt / SHOT_CHARGE_TIME);
+    if (input.shootHeld) a.charge = Math.min(1, a.charge + dt / SHOT_CHARGE_TIME);
     else return a.charge;
   }
   if (a.aimTime >= PEN_TIME_LIMIT) return a.charge;

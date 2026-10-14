@@ -4,6 +4,15 @@ Futebol 5x5 para navegador, para **2 jogadores no mesmo teclado**, com visual de
 
 Feito com TypeScript, Phaser 3.80.1 e Vite. Tudo (jogadores, estádio, torcida, placas) é desenhado por código: não há imagens externas.
 
+## Menu principal
+
+Depois da tela inicial, o menu principal mostra os modos de jogo:
+
+- **2 JOGADORES — LOCAL**: os dois jogadores no mesmo teclado (o jogo descrito abaixo).
+- **1 JOGADOR — CAMPEONATO** e **ONLINE — SALA**: aparecem marcados como *EM BREVE* e chegam nas próximas versões.
+
+Qualquer um dos dois conjuntos de teclas navega no menu (W/S ou setas); F, `;` ou Enter confirma e G ou `.` volta para a tela inicial.
+
 ## Controles
 
 | Ação | Jogador 1 (time da esquerda) | Jogador 2 (time da direita) |

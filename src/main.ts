@@ -8,6 +8,7 @@ import { BootScene } from './scenes/BootScene';
 import { MatchScene } from './scenes/MatchScene';
 import { ArtPreviewScene } from './scenes/ArtPreviewScene';
 import { TitleScene } from './scenes/TitleScene';
+import { MainMenuScene } from './scenes/MainMenuScene';
 import { TeamSelectScene } from './scenes/TeamSelectScene';
 import { VersusScene } from './scenes/VersusScene';
 import { PauseScene } from './scenes/PauseScene';
@@ -56,7 +57,17 @@ async function start(): Promise<void> {
     input: {
       keyboard: false,
     },
-    scene: [BootScene, TitleScene, TeamSelectScene, VersusScene, MatchScene, PauseScene, ResultScene, ArtPreviewScene],
+    scene: [
+      BootScene,
+      TitleScene,
+      MainMenuScene,
+      TeamSelectScene,
+      VersusScene,
+      MatchScene,
+      PauseScene,
+      ResultScene,
+      ArtPreviewScene,
+    ],
   });
 
   // Ferramenta de inspeção: com ?debug na URL, o jogo fica acessível no console.

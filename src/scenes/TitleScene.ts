@@ -94,7 +94,7 @@ export class TitleScene extends Phaser.Scene {
       this.leaving = true;
       audio.play('menu-confirmar');
       this.cameras.main.fadeOut(220, 20, 12, 8);
-      this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start('TeamSelectScene'));
+      this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start('MainMenuScene'));
     }
   }
 }
