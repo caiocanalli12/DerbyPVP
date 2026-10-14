@@ -237,6 +237,11 @@ export const KICKOFF_PASS_DEADLINE = 5;
 export const KICKOFF_AIM_ARROW_FROM = 0.35;
 export const KICKOFF_AIM_ARROW_TO = 2.8;
 export const KICKOFF_AIM_WARN_TIME = 1.5;
+/**
+ * Opacidade do preenchimento da cópia da seta desenhada por cima do batedor (o contorno fica
+ * opaco): mirando o fundo do campo ele fica à frente da bola e o corpo cobriria a seta inteira.
+ */
+export const KICKOFF_AIM_GHOST_ALPHA = 0.55;
 
 // ---------------------------------------------------------------------------
 // Troca automática de controle

@@ -1,17 +1,20 @@
 /**
  * Mira da saída de bola: seta no chão saindo da bola na direção do passe, na cor do time, e um
  * anel sob o companheiro que vai receber. Pisca perto do prazo (aí a bola sai sozinha).
+ * Uma cópia da seta com o miolo translúcido vai logo acima do batedor: mirando o fundo do campo ele
+ * fica à frente da bola e o corpo esconderia a seta inteira. Fora do corpo as duas coincidem.
  */
 import Phaser from 'phaser';
 import {
   BOIL_FPS,
   KICKOFF_AIM_ARROW_FROM,
   KICKOFF_AIM_ARROW_TO,
+  KICKOFF_AIM_GHOST_ALPHA,
   KICKOFF_AIM_WARN_TIME,
   KICKOFF_DELAY,
   KICKOFF_PASS_DEADLINE,
 } from '../config/constants';
-import { DEPTH_SHADOWS, project } from '../core/projection';
+import { DEPTH_SHADOWS, depthFor, project } from '../core/projection';
 import { INK } from '../art/style';
 import { kickoffTarget } from '../sim/match';
 import type { Match } from '../sim/match';
@@ -26,9 +29,13 @@ const RING_R = 0.62;
 const RING_SEG = 28;
 /** Tremor da linha que ferve (m). */
 const BOIL = 0.025;
+/** A cópia fica esta profundidade acima do batedor (abaixo de quem está à frente dele e da bola). */
+const GHOST_DEPTH = 1;
 
 export class KickoffAimView {
   private readonly g: Phaser.GameObjects.Graphics;
+  /** Cópia da seta por cima do batedor. */
+  private readonly ghost: Phaser.GameObjects.Graphics;
 
   constructor(
     scene: Phaser.Scene,
@@ -36,11 +43,13 @@ export class KickoffAimView {
   ) {
     // No chão: acima das linhas e sombras, abaixo dos jogadores.
     this.g = scene.add.graphics().setDepth(DEPTH_SHADOWS + 5);
+    this.ghost = scene.add.graphics();
   }
 
   update(match: Match, timeSec: number): void {
     const g = this.g;
     g.clear();
+    this.ghost.clear();
     if (match.phase !== 'SAIDA_DE_BOLA' || !match.kickoffLive) return;
     const left = KICKOFF_DELAY + KICKOFF_PASS_DEADLINE - match.phaseTimer;
     if (left < KICKOFF_AIM_WARN_TIME && Math.floor(timeSec * 8) % 2 === 0) return;
@@ -73,8 +82,15 @@ export class KickoffAimView {
     g.lineStyle(3, INK, 1);
     g.strokePoints(arrow, true);
 
-    // Anel sob quem vai receber.
+    // Cópia por cima do batedor; o y maior entre o atual e o anterior cobre a interpolação do desenho.
     const kicker = getPlayer(world, playerId(team, 'ATA'));
+    const ghost = this.ghost.setDepth(depthFor(Math.max(kicker.y, kicker.prevY)) + GHOST_DEPTH);
+    ghost.fillStyle(color, KICKOFF_AIM_GHOST_ALPHA);
+    ghost.fillPoints(arrow, true);
+    ghost.lineStyle(3, INK, 1);
+    ghost.strokePoints(arrow, true);
+
+    // Anel sob quem vai receber.
     const target = kickoffTarget(world, kicker, match.kickoffAim);
     const pulse = 1 + Math.sin(timeSec * 7) * 0.08;
     const ring: Phaser.Math.Vector2[] = [];
@@ -91,5 +107,6 @@ export class KickoffAimView {
 
   destroy(): void {
     this.g.destroy();
+    this.ghost.destroy();
   }
 }
