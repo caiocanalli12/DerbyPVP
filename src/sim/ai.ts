@@ -6,11 +6,16 @@
  * - Ataque (o time tem a bola): avançam suavemente para as posições de ataque.
  * - Defesa (o adversário tem a bola): o IA cuja zona contém o portador fica entre ele e o
  *   próprio gol, a ~2 m, bloqueando; os demais recuam e fecham o meio.
- * - A IA nunca conduz nem dá carrinho: quem pega a bola passa a ser controlado pelo humano.
+ * - Infiltrações: com `world.aiAttackBoost` (só os companheiros do CPU nos níveis mais altos), o
+ *   avanço de ataque cresce e os alas fecham em diagonal para o meio.
+ * - A IA nunca conduz nem dá carrinho: quem pega a bola passa a ser controlado pelo humano (ou
+ *   pelo CPU, que dá carrinho pelos mesmos comandos do humano).
  */
 import {
   AI_ARRIVE_RADIUS,
   AI_ATTACK_SHIFT,
+  AI_INFILTRATION_FORWARD,
+  AI_INFILTRATION_INWARD,
   AI_BALL_FOLLOW_U,
   AI_BALL_FOLLOW_V,
   AI_DEAD_ZONE,
@@ -105,10 +110,12 @@ export function aiTarget(world: World, p: Player, marker: number | null): { x: n
   const owner = ownerId !== null ? (world.players[ownerId] ?? null) : null;
 
   if (owner && owner.team === team) {
-    // Ataque: abre espaço avançando.
+    // Ataque: abre espaço avançando; com agressividade, avança mais e os alas infiltram pelo meio.
     const shift = AI_ATTACK_SHIFT[role];
-    u += shift.du;
+    const boost = world.aiAttackBoost[team];
+    u += shift.du * (1 + AI_INFILTRATION_FORWARD * boost);
     v += shift.dv;
+    if (role === 'ALA_E' || role === 'ALA_D') v += (FIELD_CENTER_Y - v) * AI_INFILTRATION_INWARD * boost;
   } else if (owner && owner.team !== team) {
     const carrier = opponentCarrier(world, team);
     if (carrier && marker === p.id) {

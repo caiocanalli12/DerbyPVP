@@ -12,8 +12,10 @@ import {
 import { isTackleActive, tackleFootTip } from '../sim/tackle';
 import { keyboard } from '../core/input';
 import type { GameMode } from '../core/modes';
-import { KeyboardTickSampler, LocalKeyboardSource } from '../core/sources';
+import { CombinedKeyboardSource, KeyboardTickSampler, LocalKeyboardSource } from '../core/sources';
 import type { CommandSource } from '../sim/command';
+import { CpuSource, isCpuLevel } from '../sim/cpu';
+import type { CpuLevel } from '../sim/cpu';
 import { DEPTH_UI } from '../core/projection';
 import { audio } from '../audio/AudioManager';
 import { BallView } from '../render/BallView';
@@ -63,16 +65,29 @@ export interface MatchConfig {
   kits?: [KitVariant, KitVariant];
   /** Modo de jogo (sem isso, 'local'). */
   mode: GameMode;
+  /** Nível do CPU adversário (modo solo; sem isso, Médio). */
+  cpuLevel?: CpuLevel;
 }
 
-/** Fontes de comando de cada time conforme o modo (a partida é a mesma nos três). */
-function createSources(mode: GameMode, sampler: KeyboardTickSampler): [CommandSource, CommandSource] {
-  switch (mode) {
+/** Nível do CPU quando o modo solo não diz qual. */
+const DEFAULT_CPU_LEVEL: CpuLevel = 'medio';
+/** Mistura da semente da partida para a do CPU (os dois não sorteiam a mesma sequência). */
+const CPU_SEED_SALT = 0x9e3779b9;
+
+/**
+ * Fontes de comando de cada time conforme o modo (a partida é a mesma nos três).
+ * Solo: o jogador é o time da esquerda no 1º tempo, com os dois conjuntos de teclas; o CPU é o outro.
+ */
+function createSources(config: MatchConfig, sampler: KeyboardTickSampler, match: Match): [CommandSource, CommandSource] {
+  switch (config.mode) {
     case 'local':
       return [new LocalKeyboardSource(sampler, 0), new LocalKeyboardSource(sampler, 1)];
-    case 'solo':
+    case 'solo': {
+      const seed = (match.world.rng.getState() ^ CPU_SEED_SALT) >>> 0;
+      return [new CombinedKeyboardSource(sampler), new CpuSource(match, 1, config.cpuLevel ?? DEFAULT_CPU_LEVEL, seed)];
+    }
     case 'online':
-      throw new Error(`modo ainda não disponível: ${mode}`);
+      throw new Error(`modo ainda não disponível: ${config.mode}`);
   }
 }
 
@@ -117,19 +132,22 @@ export class MatchScene extends Phaser.Scene {
   }
 
   init(data: Partial<MatchConfig>): void {
-    // Sem menus (ou para depurar): ?t1=PAL&t2=COR na URL.
+    // Sem menus (ou para depurar): ?t1=PAL&t2=COR na URL; com ?cpu=facil|medio|dificil, partida
+    // avulsa contra o CPU (modo solo).
     const q = new URLSearchParams(window.location.search);
     const pick = (v: string | null | undefined, fallback: TeamId): TeamId =>
       v && isTeamId(v.toUpperCase()) ? (v.toUpperCase() as TeamId) : fallback;
     const seed = data.seed ?? (Date.now() >>> 0);
     const w = q.get('weather');
+    const cpu = q.get('cpu');
     const rng = new Rng(seed ^ 0xbeef);
     this.config = {
       teams: data.teams ?? [pick(q.get('t1'), 'PAL'), pick(q.get('t2'), 'COR')],
       seed,
       weather: data.weather ?? (w && isWeatherId(w) ? w : randomWeather(() => rng.next())),
       kits: data.kits,
-      mode: data.mode ?? 'local',
+      mode: data.mode ?? (isCpuLevel(cpu) ? 'solo' : 'local'),
+      cpuLevel: data.cpuLevel ?? (isCpuLevel(cpu) ? cpu : undefined),
     };
   }
 
@@ -138,11 +156,11 @@ export class MatchScene extends Phaser.Scene {
     this.loading = null;
     this.tick = 0;
     this.sampler = new KeyboardTickSampler();
-    this.sources = createSources(this.config.mode, this.sampler);
     const [t1, t2] = this.config.teams;
     this.kits = this.config.kits ? kitChoiceFor(t1, t2, this.config.kits) : chooseKits(t1, t2);
     // A semente da arte fica fixa (revanche reaproveita as texturas); a da partida varia.
     this.match = createMatch((this.config.seed ^ Date.now()) >>> 0);
+    this.sources = createSources(this.config, this.sampler, this.match);
     const signature = artSignature(this.config.teams, this.kits, this.config.seed);
     if (matchArtReady(this, signature)) {
       this.buildViews();
@@ -342,6 +360,8 @@ export class MatchScene extends Phaser.Scene {
         winner,
         colors: [this.kits.kits[0].shirt, this.kits.kits[1].shirt],
         kits: this.kits.variants,
+        mode: this.config.mode,
+        cpuLevel: this.config.cpuLevel,
       }),
     );
   }
@@ -426,8 +446,9 @@ export class MatchScene extends Phaser.Scene {
         `bola (${b.x.toFixed(2)}, ${b.y.toFixed(2)}, z ${b.z.toFixed(2)}) ${Math.hypot(b.vx, b.vy, b.vz).toFixed(1)}m/s`,
         b.z,
       );
+      const cpu = this.sources[1] instanceof CpuSource ? ` · CPU ${this.sources[1].level}: ${this.sources[1].intentKind}` : '';
       this.debug.setInfo(
-        `DEBUG · ${this.match.phase} · t=${world.time.toFixed(1)}s · J1 defende ${world.defends[0] === 0 ? 'esq' : 'dir'}`,
+        `DEBUG · ${this.match.phase} · t=${world.time.toFixed(1)}s · J1 defende ${world.defends[0] === 0 ? 'esq' : 'dir'}${cpu}`,
       );
     }
     this.debug.endFrame();

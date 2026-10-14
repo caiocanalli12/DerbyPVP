@@ -73,6 +73,11 @@ export interface World {
   keepers: [KeeperState, KeeperState];
   /** IA ligada (jogadores de linha e goleiros). Desligar serve para testes e depuração. */
   aiEnabled: boolean;
+  /**
+   * Agressividade dos jogadores de linha da IA no ataque, por time (0 = a de sempre, 1 = alta):
+   * infiltrações dos companheiros do CPU nos níveis mais altos (modo solo).
+   */
+  aiAttackBoost: [number, number];
   /** Gol marcado neste passo (lado do gol), se houver. A partida decide o que fazer. */
   goal: GoalSide | null;
   /** Eventos acumulados desde a última leitura (drainEvents). */
@@ -101,6 +106,7 @@ export function createWorld(seed = 1): World {
     ballInHands: false,
     keepers: [createKeeperState(), createKeeperState()],
     aiEnabled: true,
+    aiAttackBoost: [0, 0],
     goal: null,
     events: [],
     rng: new Rng(seed),

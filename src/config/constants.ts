@@ -329,6 +329,12 @@ export const AI_ATTACK_SHIFT = {
   ALA_D: { du: 8, dv: 2 },
   ATA: { du: 6, dv: 0 },
 } as const;
+/**
+ * Infiltrações (só os companheiros do CPU nos níveis mais altos, `world.aiAttackBoost`): com
+ * agressividade 1, o avanço de ataque cresce esta fração e os alas fecham esta fração para o meio.
+ */
+export const AI_INFILTRATION_FORWARD = 0.4;
+export const AI_INFILTRATION_INWARD = 0.3;
 /** Quando o adversário tem a bola: recuo (m) e quanto os demais fecham o meio (0..1). */
 export const AI_DEFENSE_DROP = 3;
 export const AI_DEFENSE_SQUEEZE = 0.4;
@@ -698,3 +704,153 @@ export const SFX_SAVE_BOING_WOBBLE_HZ = 13;
 export const SFX_SAVE_BOING_WOBBLE_DEPTH = 0.3;
 export const SFX_SAVE_BOING_TIME = 0.5;
 export const SFX_SAVE_BOING_GAIN = 0.16;
+
+// ---------------------------------------------------------------------------
+// CPU do adversário (modo solo)
+// ---------------------------------------------------------------------------
+
+/**
+ * Níveis do CPU. A dificuldade muda só a agressividade (passes, chutes e ataque) e os carrinhos:
+ * velocidade dos jogadores e goleiro são os mesmos em todos os níveis.
+ *
+ * - reactionTime: atraso (s) para perceber uma mudança de situação (posse, controle, bola desviada).
+ * - decisionInterval: intervalo (s) entre decisões (não decide a cada quadro).
+ * - passAimErrorDeg / shotAimErrorDeg: erro de mira (±graus) no passe e no chute.
+ * - maxShotDistance: distância máxima (m) do gol para chutar.
+ * - pressDistance: distância (m) que mantém do portador ao pressionar.
+ * - infiltration: infiltrações dos companheiros no ataque (0 = baixa, a IA de sempre; 1 = alta).
+ * - tackleChance: chance de tentar o carrinho numa oportunidade; tackleTimingError: erro (±s).
+ * - shotPostInset: no chute, mira o canto oposto ao goleiro a esta distância (m) para dentro do poste
+ *   (agressividade no chute: quanto menor, mais no canto e mais arriscado).
+ * - penaltyAimError (±m) e penaltyPowerError (±): erro do canto e da força na cobrança de pênalti.
+ *
+ * Ajuste (fase 18, partidas simuladas contra um "humano" de teclado: o próprio CPU em 8 direções,
+ * chutando no meio do gol quando a direção não dá): a tabela da spec, exceto a reação do Fácil
+ * (0,35 → 0,45 s; com 0,35 o iniciante perdia ~75% das partidas, agora ~60%) e o carrinho do
+ * Difícil (35% → 25%; com 35% um jogador bom ganhava ~10%, agora ~27%). Médio ficou como na spec
+ * (o jogador médio ganha ~37%).
+ */
+export const CPU_LEVELS = {
+  facil: {
+    reactionTime: 0.45,
+    decisionInterval: 0.4,
+    passAimErrorDeg: 14,
+    shotAimErrorDeg: 12,
+    maxShotDistance: 9,
+    pressDistance: 2.5,
+    infiltration: 0,
+    tackleChance: 0,
+    tackleTimingError: 0,
+    shotPostInset: 1.05,
+    penaltyAimError: 0.55,
+    penaltyPowerError: 0.22,
+  },
+  medio: {
+    reactionTime: 0.22,
+    decisionInterval: 0.25,
+    passAimErrorDeg: 8,
+    shotAimErrorDeg: 7,
+    maxShotDistance: 12,
+    pressDistance: 1.6,
+    infiltration: 0.5,
+    tackleChance: 0.15,
+    tackleTimingError: 0.08,
+    shotPostInset: 0.75,
+    penaltyAimError: 0.35,
+    penaltyPowerError: 0.14,
+  },
+  dificil: {
+    reactionTime: 0.12,
+    decisionInterval: 0.15,
+    passAimErrorDeg: 4,
+    shotAimErrorDeg: 3.5,
+    maxShotDistance: 15,
+    pressDistance: 1.0,
+    infiltration: 1,
+    tackleChance: 0.25,
+    tackleTimingError: 0.04,
+    shotPostInset: 0.6,
+    penaltyAimError: 0.18,
+    penaltyPowerError: 0.08,
+  },
+} as const;
+
+/** Variação aleatória (± fração) do tempo de reação e do intervalo entre decisões. */
+export const CPU_TIMING_JITTER = 0.2;
+/** A bola solta mudou de velocidade mais que isto (m/s) num passo (desvio, trave, defesa): o CPU reage. */
+export const CPU_BALL_JOLT = 3;
+/** Até este tempo (s) depois de passar ou chutar, a mudança de situação é a esperada (sem reação). */
+export const CPU_OWN_ACTION_TIME = 0.3;
+
+/** Saída de bola: pausa (s) depois de perceber o apito, mín. e máx., e tolerância da mira (graus). */
+export const CPU_KICKOFF_THINK_MIN = 0.3;
+export const CPU_KICKOFF_THINK_MAX = 1.0;
+export const CPU_KICKOFF_AIM_TOLERANCE_DEG = 4;
+
+/** Com a bola: está pressionado com um adversário de linha a menos disto (m). */
+export const CPU_PRESSURE_RADIUS = 2.2;
+/**
+ * Passe: pontuação de uma posição = espaço livre (m até o adversário mais perto, com teto) * peso
+ * - distância ao gol atacado (m) * peso. Passa se um companheiro com linha livre for "claramente
+ * melhor" (margem) ou, pressionado, se não for muito pior (folga).
+ */
+export const CPU_PASS_SPACE_WEIGHT = 1;
+export const CPU_PASS_SPACE_CAP = 5;
+export const CPU_PASS_GOAL_WEIGHT = 0.35;
+export const CPU_PASS_BETTER_MARGIN = 2.5;
+export const CPU_PASS_PRESSURE_SLACK = 1;
+/** Linha de passe livre: nenhum adversário a menos disto (m) do trajeto. */
+export const CPU_PASS_LANE_CLEARANCE = 1.1;
+/** Distância (m) mínima e máxima de um passe. */
+export const CPU_PASS_MIN_DIST = 3;
+export const CPU_PASS_MAX_DIST = 22;
+
+/** Chute: ângulo mínimo (graus) da boca do gol vista da bola e folga (m) da linha do chute aos adversários. */
+export const CPU_SHOT_MIN_MOUTH_DEG = 12;
+export const CPU_SHOT_LANE_CLEARANCE = 0.7;
+/** Tão perto do gol (m), chuta mesmo com a linha fechada. */
+export const CPU_SHOT_POINT_BLANK = 5;
+/** Para ver se a linha do chute está livre, testa os cantos a esta distância (m) para dentro dos postes. */
+export const CPU_SHOT_LANE_INSET = 0.6;
+/** Carga do chute: base + por metro de distância ao gol, limitada, com variação (±). */
+export const CPU_SHOT_CHARGE_BASE = 0.35;
+export const CPU_SHOT_CHARGE_PER_METER = 0.035;
+export const CPU_SHOT_CHARGE_MIN = 0.45;
+export const CPU_SHOT_CHARGE_MAX = 0.8;
+export const CPU_SHOT_CHARGE_JITTER = 0.05;
+
+/** Condução: raio (m) e peso do desvio dos marcadores; distância (m) das paredes a evitar e peso. */
+export const CPU_AVOID_RADIUS = 3.5;
+export const CPU_AVOID_WEIGHT = 1.4;
+export const CPU_WALL_MARGIN = 2;
+export const CPU_WALL_WEIGHT = 1.2;
+/** Perto da linha de fundo (m) sem ângulo para chutar: volta para a marca do pênalti. */
+export const CPU_BYLINE_DIST = 4;
+
+/** Defesa: antecipação (s) do portador e raio (m) em que desacelera ao chegar ao ponto de pressão. */
+export const CPU_PRESS_LEAD = 0.15;
+export const CPU_ARRIVE_RADIUS = 0.8;
+/** Ao pressionar, desloca o ponto até isto (m) para a linha de passe mais perigosa. */
+export const CPU_LANE_SHADE = 0.8;
+
+/**
+ * Carrinho: oportunidade quando a bola, prevista para o meio da janela ativa, fica nesta faixa de
+ * distância (m) do jogador; o episódio (uma chance por portador) acaba quando ele se afasta disto (m).
+ */
+export const CPU_TACKLE_MIN_DIST = 1.2;
+export const CPU_TACKLE_IDEAL_DIST = 1.9;
+export const CPU_TACKLE_MAX_DIST = 2.5;
+export const CPU_TACKLE_EPISODE_DIST = 3.5;
+
+/** Bola solta: previsão para interceptar (horizonte e passo, s). */
+export const CPU_INTERCEPT_HORIZON = 2.5;
+export const CPU_INTERCEPT_STEP = 0.05;
+
+/** Pênalti: canto (m do centro do gol), chance de bater no meio e força alvo. */
+export const CPU_PEN_CORNER_OFFSET = 1.0;
+export const CPU_PEN_CENTER_CHANCE = 0.1;
+export const CPU_PEN_POWER = 0.7;
+/** Pênalti: pausa (s) antes de chutar, mín. e máx., e folga (s) antes do prazo. */
+export const CPU_PEN_THINK_MIN = 0.8;
+export const CPU_PEN_THINK_MAX = 1.8;
+export const CPU_PEN_DEADLINE_MARGIN = 0.4;

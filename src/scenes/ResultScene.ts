@@ -4,6 +4,9 @@ import { audio } from '../audio/AudioManager';
 import { getTeam } from '../data/teams';
 import type { TeamId } from '../data/teams';
 import type { KitVariant } from '../sim/kits';
+import { sideLabel } from '../core/modes';
+import type { GameMode } from '../core/modes';
+import type { CpuLevel } from '../sim/cpu';
 import { crestKey, generateCrestTextures } from '../art/crest-art';
 import { CROWD_KEY, FAN_BOILS, FAN_VARIANTS, fanFrame } from '../art/crowd-art';
 import { CREAM, CREAM_CSS, FONT_TEXT, FONT_TITLE, INK, INK_CSS } from '../art/style';
@@ -26,6 +29,9 @@ export interface ResultData {
   colors: [number, number];
   /** Uniformes usados (a revanche e a nova seleção partem deles). */
   kits: [KitVariant, KitVariant];
+  /** Modo e nível do CPU da partida (a revanche repete). */
+  mode: GameMode;
+  cpuLevel?: CpuLevel;
 }
 
 /**
@@ -100,7 +106,7 @@ export class ResultScene extends Phaser.Scene {
       .text(textX, 300, 'VENCEDOR', { fontFamily: FONT_TEXT, fontSize: '28px', fontStyle: '700', color: CREAM_CSS, stroke: INK_CSS, strokeThickness: 5 })
       .setOrigin(0.5);
     this.add
-      .text(textX, 396, d.winner === 0 ? 'JOGADOR 1' : 'JOGADOR 2', { fontFamily: FONT_TEXT, fontSize: '20px', color: CREAM_CSS, stroke: INK_CSS, strokeThickness: 4 })
+      .text(textX, 396, sideLabel(d.mode, d.winner), { fontFamily: FONT_TEXT, fontSize: '20px', color: CREAM_CSS, stroke: INK_CSS, strokeThickness: 4 })
       .setOrigin(0.5);
 
     // A torcida do vencedor comemorando (mesmas texturas da partida).
@@ -147,7 +153,7 @@ export class ResultScene extends Phaser.Scene {
       this.cameras.main.fadeOut(220, 20, 12, 8);
       this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start(scene, data));
     };
-    if (chosen === 0) go('VersusScene', { teams: d.teams, seed: d.seed, kits: d.kits, mode: 'local' });
+    if (chosen === 0) go('VersusScene', { teams: d.teams, seed: d.seed, kits: d.kits, mode: d.mode, cpuLevel: d.cpuLevel });
     else if (chosen === 1) go('TeamSelectScene', { teams: d.teams, kits: d.kits });
     else go('MainMenuScene', {});
   }

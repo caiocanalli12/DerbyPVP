@@ -5,7 +5,9 @@
  * - Só acerta dentro da janela ativa (TACKLE_ACTIVE_WINDOW, no meio do deslize), com uma
  *   hitbox circular na ponta do pé.
  * - Acertou a bola de quem conduz: bola solta na direção do carrinho e o adversário cambaleia.
- * - Acertou bola solta: empurra a bola. Errou: fica caído. Sem faltas. A IA não dá carrinho.
+ * - Acertou bola solta: empurra a bola. Errou: fica caído. Sem faltas.
+ * - Só quem é comandado (humano ou o CPU do modo solo, pelo mesmo comando) dá carrinho; os
+ *   companheiros da IA não.
  */
 import {
   BALL_RADIUS,

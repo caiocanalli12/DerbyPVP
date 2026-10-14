@@ -35,6 +35,10 @@ O `;` funciona tanto no teclado brasileiro (ABNT2, tecla ao lado do `.`) quanto 
 
 Os efeitos sonoros (chute, passe, apito, gol e defesa) são sintetizados na hora pelo navegador (Web Audio), com timbre de rádio antigo; não há arquivos de áudio. Por regra dos navegadores, o som só começa depois do primeiro clique ou tecla. **M** liga e desliga o som em qualquer tela, e o menu de pausa tem o volume (A/D ou ←/→) e a opção de som. A escolha fica salva no navegador.
 
+## Partida de teste contra o computador
+
+O modo **1 Jogador** (campeonato) ainda está sendo construído. Enquanto isso, dá para jogar uma partida avulsa contra o computador abrindo o jogo com `?cpu=facil`, `?cpu=medio` ou `?cpu=dificil` no endereço (por exemplo, `http://localhost:5173/?cpu=medio&t1=PAL&t2=COR`). Você joga com o time da esquerda e pode usar os dois conjuntos de teclas ao mesmo tempo (WASD + F + G e setas + `;` + `.`).
+
 ## Rodando localmente
 
 Requer Node.js 20 ou mais novo.
