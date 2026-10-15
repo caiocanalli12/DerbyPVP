@@ -197,6 +197,7 @@ class FakeNetwork {
 
 class FakePeer extends Emitter implements PeerLike {
   destroyed = false;
+  disconnected = false;
   /** Conexões recebidas (lado do anfitrião). */
   readonly incoming: FakeConn[] = [];
   constructor(
@@ -341,7 +342,7 @@ describe('sessão online (rede falsa)', () => {
   it('o visitante também recusa um anfitrião de outra versão', async () => {
     const net = new FakeNetwork();
     // Anfitrião "antigo", na mão.
-    const peer = (await net.factory('derby-pvp-sala-QQQQQ')) as FakePeer;
+    const peer = (await net.factory('derby-pvp-sala-QQQQQ')) as unknown as FakePeer;
     peer.on('connection', (c: unknown) => {
       const conn = c as FakeConn;
       conn.on('data', () => conn.send({ type: 'hello', v: PROTOCOL_VERSION + 1, game: GAME_VERSION, role: 'host', session: 'x' }));
@@ -402,6 +403,39 @@ describe('sessão online (rede falsa)', () => {
     peer.incoming[0]!.close();
     await vi.advanceTimersByTimeAsync(100);
     expect(guestEvents).toContainEqual({ kind: 'remote-left', reason: 'dropped' });
+  });
+
+  it('o canal cai no meio do jogo: o visitante volta sozinho com o mesmo token', async () => {
+    const { net, host, guest } = await connectPair();
+    const hostEvents = record(host);
+    const guestEvents = record(guest);
+    const hostPeer = net.peers.get(`derby-pvp-sala-${host.code}`)!;
+    hostPeer.incoming[0]!.close();
+    await vi.advanceTimersByTimeAsync(5);
+    expect(hostEvents).toContainEqual({ kind: 'remote-left', reason: 'dropped' });
+    expect(host.state).toBe('reconnecting');
+    // Alguém de fora tentando entrar logo em seguida: sala cheia (o visitante de antes é que volta).
+    const stranger = NetSession.join(host.code, net.factory);
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(stranger.error).toBe('full');
+    expect(host.state).toBe('connected');
+    expect(guest.state).toBe('connected');
+    expect(hostEvents).toContainEqual({ kind: 'reconnected' });
+    expect(guestEvents).toContainEqual({ kind: 'reconnected' });
+    // E as mensagens voltam a passar.
+    guest.send(message({ type: 'ready' }));
+    await vi.advanceTimersByTimeAsync(10);
+    expect(hostEvents).toContainEqual({ kind: 'message', msg: { type: 'ready', v: PROTOCOL_VERSION } });
+  });
+
+  it('ping medido nos dois lados', async () => {
+    const { host, guest } = await connectPair();
+    expect(host.pingMs).toBeNull();
+    await vi.advanceTimersByTimeAsync(1100);
+    expect(host.pingMs).not.toBeNull();
+    expect(guest.pingMs).not.toBeNull();
+    expect(host.pingMs!).toBeGreaterThanOrEqual(0);
+    expect(host.pingMs!).toBeLessThan(100);
   });
 
   it('sem WebRTC no navegador: "sem suporte", sem exceção', async () => {

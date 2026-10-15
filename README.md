@@ -51,6 +51,9 @@ Sem login e sem servidor próprio: os navegadores se encontram pelo servidor pú
 - **Criar sala**: aparece um código de 5 letras e números e o botão **Copiar link**. Mande o código ou o link para o seu adversário. Quem cria a sala joga com o time da esquerda no 1º tempo.
 - **Entrar com código**: digite o código (minúsculas valem) ou cole o link. Abrir o link entra direto na sala.
 - Cada um escolhe o próprio time na própria tela e vê a escolha do outro; o mesmo time pode (o visitante usa o uniforme reserva). Os dois conjuntos de teclas funcionam juntos.
+- **A partida**: quem criou a sala roda a partida oficial; o outro vê tudo com ~100 ms de atraso, mas o próprio jogador responde na hora. Não existe pausa: **Esc** ou **P** abre um menu pequeno com **Sair da partida** (quem sai perde por W.O.) enquanto o jogo continua. Trocar de janela não pausa.
+- **Queda de conexão**: a partida congela para os dois com a contagem *Adversário desconectado — aguardando (10)*. Se ele voltar a tempo, continua; senão, vitória por W.O. O ping aparece num canto do placar (verde até 80 ms, amarelo até 150 ms, vermelho acima).
+- No fim, **Revanche** começa quando os dois aceitam (com um clima novo).
 - **Limitação conhecida:** sem um servidor TURN próprio, algumas redes muito restritivas (alguns ambientes corporativos ou de faculdade) podem não conectar. Nesse caso aparece "Não foi possível conectar. Tente outra rede."
 
 ### Testando o online sozinho
@@ -59,7 +62,7 @@ Sem login e sem servidor próprio: os navegadores se encontram pelo servidor pú
 2. Abra o jogo numa janela normal e em outra **janela anônima** do navegador (são sessões separadas, como dois computadores).
 3. Na primeira: **ONLINE — SALA → CRIAR SALA** e **COPIAR LINK**.
 4. Na anônima: cole o link na barra de endereço (ou vá em **ENTRAR COM CÓDIGO** e digite o código).
-5. Escolha um time em cada janela e confirme nas duas.
+5. Escolha um time em cada janela e confirme nas duas: a partida começa nas duas janelas (cada uma controla o próprio time; dá para alternar entre elas com Alt+Tab, a partida continua mesmo com a janela do anfitrião em segundo plano).
 
 ## Rodando localmente
 

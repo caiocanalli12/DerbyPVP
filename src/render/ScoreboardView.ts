@@ -8,7 +8,8 @@ import { DEPTH_UI } from '../core/projection';
 import { getTeam } from '../data/teams';
 import type { TeamId } from '../data/teams';
 import { crestKey, CREST_SIZE, generateCrestTextures } from '../art/crest-art';
-import { generateScoreboardTextures, SB_PLATE_H, SB_PLATE_KEY, SB_TAB_KEY } from '../art/ui-art';
+import { generateScoreboardTextures, SB_PLATE_H, SB_PLATE_KEY, SB_PLATE_W, SB_TAB_KEY } from '../art/ui-art';
+import { pingColor } from '../net/sync';
 import { CREAM, CREAM_CSS, FONT_TEXT, FONT_TITLE, INK, INK_CSS } from '../art/style';
 import { formatClock, PERIOD_LABEL } from '../sim/match';
 import type { Match } from '../sim/match';
@@ -17,6 +18,7 @@ import type { PenaltyResult } from '../sim/penalties';
 const CX = GAME_WIDTH / 2;
 const TOP = 6;
 const MID = TOP + 4 + SB_PLATE_H / 2;
+const PING_CSS = { green: '#7fd36b', yellow: '#ffd24a', red: '#ff7a63' } as const;
 
 export class ScoreboardView {
   private readonly objects: Phaser.GameObjects.GameObject[] = [];
@@ -25,12 +27,15 @@ export class ScoreboardView {
   private readonly kickoff: Phaser.GameObjects.Text;
   private readonly series: Phaser.GameObjects.Graphics;
   private lastScore = '';
+  private ping: Phaser.GameObjects.Text | null = null;
+  private readonly scene: Phaser.Scene;
 
   constructor(
     scene: Phaser.Scene,
     teams: readonly [TeamId, TeamId],
     private readonly colors: readonly [number, number],
   ) {
+    this.scene = scene;
     generateScoreboardTextures(scene);
     generateCrestTextures(scene);
     const d = DEPTH_UI;
@@ -88,6 +93,19 @@ export class ScoreboardView {
         .setDepth(d + 1),
     );
     this.series = add(scene.add.graphics().setDepth(d + 1));
+  }
+
+  /** Ping do online, num canto discreto do placar: verde até 80 ms, amarelo até 150, vermelho acima. */
+  setPing(ms: number | null): void {
+    if (!this.ping) {
+      this.ping = this.scene.add
+        .text(CX + SB_PLATE_W / 2 + 12, TOP + 14, '', { fontFamily: FONT_TEXT, fontSize: '16px', fontStyle: '700', color: CREAM_CSS, stroke: INK_CSS, strokeThickness: 4 })
+        .setOrigin(0, 0.5)
+        .setDepth(DEPTH_UI + 1);
+      this.objects.push(this.ping);
+    }
+    const color = ms === null ? CREAM_CSS : PING_CSS[pingColor(ms)];
+    this.ping.setText(ms === null ? '● … ms' : `● ${ms} ms`).setColor(color);
   }
 
   update(match: Match, timeSec: number): void {

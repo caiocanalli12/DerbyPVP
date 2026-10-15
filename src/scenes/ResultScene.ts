@@ -11,7 +11,15 @@ import { crestKey, generateCrestTextures } from '../art/crest-art';
 import { CROWD_KEY, FAN_BOILS, FAN_VARIANTS, fanFrame } from '../art/crowd-art';
 import { CREAM, CREAM_CSS, FONT_TEXT, FONT_TITLE, INK, INK_CSS } from '../art/style';
 import { FilmView, filmEffectsEnabled } from '../render/FilmView';
-import { addSunburst, addTitle, ButtonList, readMenuInput } from '../render/menu';
+import { addSunburst, addTitle, ButtonList, NoticeDialog, readMenuInput } from '../render/menu';
+import type { MenuInput } from '../render/menu';
+import { Rng } from '../core/rng';
+import { randomWeather } from '../data/weather';
+import type { WeatherId } from '../data/weather';
+import { currentSession, setCurrentSession } from '../net/peer';
+import type { NetSession, SessionEvent } from '../net/peer';
+import { message } from '../net/protocol';
+import type { VersusData } from './VersusScene';
 
 /** Largura máxima do nome do vencedor e o espaço entre ele e o escudo (px). */
 const WINNER_NAME_MAX_W = 520;
@@ -36,7 +44,8 @@ export interface ResultData {
 
 /**
  * Resultado: placar final (com pênaltis, se houver), vencedor em destaque com a torcida dele
- * comemorando, e as opções Revanche, Trocar times e Menu principal.
+ * comemorando, e as opções Revanche, Trocar times e Menu principal. Online: Revanche (só começa
+ * quando os dois aceitam; o anfitrião sorteia um clima novo) e Sair.
  */
 export class ResultScene extends Phaser.Scene {
   private data_!: ResultData;
@@ -46,6 +55,12 @@ export class ResultScene extends Phaser.Scene {
   private fans: { img: Phaser.GameObjects.Image; v: number; phase: number; baseY: number }[] = [];
   private winnerCrest!: Phaser.GameObjects.Image;
   private leaving = false;
+  // --- online ---
+  private session: NetSession | null = null;
+  private off: (() => void) | null = null;
+  private localAccepted = false;
+  private remoteAccepted = false;
+  private notice: NoticeDialog | null = null;
 
   constructor() {
     super('ResultScene');
@@ -125,10 +140,28 @@ export class ResultScene extends Phaser.Scene {
       }
     }
 
-    this.list = new ButtonList(this, GAME_WIDTH / 2, 470, ['REVANCHE', 'TROCAR TIMES', 'MENU PRINCIPAL'], 62, 10);
+    const online = d.mode === 'online';
+    this.list = new ButtonList(this, GAME_WIDTH / 2, 470, online ? ['REVANCHE', 'SAIR'] : ['REVANCHE', 'TROCAR TIMES', 'MENU PRINCIPAL'], 62, 10);
     this.film = new FilmView(this, filmEffectsEnabled(this));
     readMenuInput();
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.film.destroy());
+    this.localAccepted = false;
+    this.remoteAccepted = false;
+    this.notice = null;
+    this.session = null;
+    if (online) {
+      const s = currentSession();
+      if (s && s.state === 'connected') {
+        this.session = s;
+        this.off = s.listen((e) => this.onSession(e));
+      } else {
+        this.notice = new NoticeDialog(this, 'O ADVERSÁRIO SAIU', 'A conexão com a sala acabou.', 'VOLTAR');
+      }
+    }
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.film.destroy();
+      this.off?.();
+      this.off = null;
+    });
     audio.play('torcida');
   }
 
@@ -143,18 +176,88 @@ export class ResultScene extends Phaser.Scene {
       const s = Math.sin(t * 7 + f.phase);
       f.img.setFrame(fanFrame(this.data_.winner, f.v, s > 0 ? 3 : 2, boil)).setY(f.baseY - Math.abs(s) * 8);
     }
+    this.notice?.update(t);
     if (this.leaving) return;
-    const chosen = this.list.handle(readMenuInput(), () => audio.play('menu-mover'));
+    const input = readMenuInput();
+    if (this.data_.mode === 'online') {
+      this.updateOnline(input);
+      return;
+    }
+    const chosen = this.list.handle(input, () => audio.play('menu-mover'));
     if (chosen === null) return;
     audio.play('menu-confirmar');
     const d = this.data_;
-    const go = (scene: string, data: object): void => {
-      this.leaving = true;
-      this.cameras.main.fadeOut(220, 20, 12, 8);
-      this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start(scene, data));
-    };
-    if (chosen === 0) go('VersusScene', { teams: d.teams, seed: d.seed, kits: d.kits, mode: d.mode, cpuLevel: d.cpuLevel });
-    else if (chosen === 1) go('TeamSelectScene', { teams: d.teams, kits: d.kits });
-    else go('MainMenuScene', {});
+    if (chosen === 0) this.go('VersusScene', { teams: d.teams, seed: d.seed, kits: d.kits, mode: d.mode, cpuLevel: d.cpuLevel });
+    else if (chosen === 1) this.go('TeamSelectScene', { teams: d.teams, kits: d.kits });
+    else this.go('MainMenuScene', {});
+  }
+
+  private go(scene: string, data: object): void {
+    this.leaving = true;
+    this.cameras.main.fadeOut(220, 20, 12, 8);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start(scene, data));
+  }
+
+  // --- online -----------------------------------------------------------------
+
+  private updateOnline(input: MenuInput): void {
+    if (this.notice) {
+      if (this.notice.handle(input)) this.leaveOnline();
+      return;
+    }
+    const chosen = this.list.handle(input, () => audio.play('menu-mover'));
+    if (chosen === null) return;
+    audio.play('menu-confirmar');
+    if (chosen === 1) {
+      this.leaveOnline();
+      return;
+    }
+    if (this.localAccepted) return;
+    this.localAccepted = true;
+    this.list.buttons[0]!.setLabel('AGUARDANDO O ADVERSÁRIO…');
+    this.session?.send(message({ type: 'rematch', accept: true }));
+    this.maybeRematch();
+  }
+
+  private onSession(e: SessionEvent): void {
+    if (this.leaving) return;
+    if (e.kind === 'remote-left') {
+      this.notice ??= new NoticeDialog(this, 'O ADVERSÁRIO SAIU', 'A conexão com a sala acabou.', 'VOLTAR');
+      return;
+    }
+    if (e.kind !== 'message') return;
+    const msg = e.msg;
+    if (msg.type === 'rematch') {
+      this.remoteAccepted = msg.accept;
+      if (msg.accept && !this.localAccepted) this.list.buttons[0]!.setLabel('REVANCHE (O ADVERSÁRIO QUER!)');
+      this.maybeRematch();
+    } else if (msg.type === 'start' && this.session?.role === 'guest') {
+      this.startRematch(msg.teams, msg.seed, msg.weather);
+    }
+  }
+
+  /**
+   * Os dois aceitaram: o anfitrião sorteia um clima novo e manda começar. A semente da arte é a
+   * mesma (os dois lados reaproveitam as texturas).
+   */
+  private maybeRematch(): void {
+    const s = this.session;
+    if (!s || s.role !== 'host' || !this.localAccepted || !this.remoteAccepted) return;
+    const seed = this.data_.seed;
+    const rng = new Rng((Date.now() ^ 0x5eedab) >>> 0);
+    const weather = randomWeather(() => rng.next());
+    const teams = this.data_.teams;
+    s.send(message({ type: 'start', teams, weather, seed }));
+    this.startRematch(teams, seed, weather);
+  }
+
+  private startRematch(teams: [TeamId, TeamId], seed: number, weather: WeatherId): void {
+    const data: VersusData = { teams, seed, weather, mode: 'online' };
+    this.go('VersusScene', data);
+  }
+
+  private leaveOnline(): void {
+    setCurrentSession(null);
+    this.go('OnlineMenuScene', {});
   }
 }

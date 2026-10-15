@@ -33,6 +33,8 @@ export interface VersusData {
   cpuLevel?: CpuLevel;
   /** Campeonato em andamento (modo solo). */
   tournament?: Tournament;
+  /** Clima já sorteado (online: o anfitrião sorteia e manda); sem isso, sorteia aqui. */
+  weather?: WeatherId;
 }
 
 /** Instante (s) do choque dos escudos e onde eles param (distância do centro). */
@@ -78,7 +80,7 @@ export class VersusScene extends Phaser.Scene {
   init(data: VersusData): void {
     const seed = data.seed ?? (Date.now() >>> 0);
     const rng = new Rng((Date.now() ^ 0x5eed) >>> 0);
-    const weather: WeatherId = randomWeather(() => rng.next());
+    const weather: WeatherId = data.weather ?? randomWeather(() => rng.next());
     this.config = {
       teams: data.teams,
       seed,

@@ -897,3 +897,21 @@ export const NET_HOST_ID_RETRIES = 3;
 export const NET_LEAVE_FLUSH = 0.3;
 /** No máximo tantas mensagens inválidas registradas no console por sessão. */
 export const NET_MAX_INVALID_LOGS = 20;
+/** Ping: intervalo (s) entre medidas. */
+export const NET_PING_INTERVAL = 1;
+/** Conexão caída no meio do jogo: o visitante tenta voltar a cada tantos s. */
+export const NET_RECONNECT_INTERVAL = 1.5;
+/** Sem nenhuma mensagem do outro por tanto tempo (s), a partida congela (como numa queda). */
+export const NET_STALL_TIME = 2;
+/** Tempo (s) esperando o adversário voltar antes da vitória por W.O. */
+export const NET_WO_TIMEOUT = 10;
+/** Snapshots do anfitrião a cada tantos ticks (2 = 30 Hz); esperando o visitante ficar pronto, a cada tantos s. */
+export const NET_SNAPSHOT_TICKS = 2;
+export const NET_IDLE_SNAPSHOT_TIME = 0.5;
+/** Atraso (s) do desenho do visitante em relação ao anfitrião (buffer de interpolação). */
+export const NET_INTERP_DELAY = 0.1;
+/** Previsão do jogador do visitante: tempo (s) para a correção sumir e distância (m) acima da qual pula direto. */
+export const NET_PREDICT_CORRECTION_TIME = 0.12;
+export const NET_PREDICT_SNAP_DIST = 1.5;
+/** O visitante repete o "pronto" a cada tantos s até a partida começar. */
+export const NET_READY_RESEND = 1;

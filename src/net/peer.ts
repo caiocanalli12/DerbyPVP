@@ -20,10 +20,13 @@ import {
   NET_LEAVE_FLUSH,
   NET_MAX_INVALID_LOGS,
   NET_OPEN_TIMEOUT,
+  NET_PING_INTERVAL,
+  NET_RECONNECT_INTERVAL,
 } from '../config/constants';
 import { compatible, GAME_VERSION, message, parseMessage } from './protocol';
 import type { LeaveReason, NetMessage, NetRole } from './protocol';
 import { generateRoomCode, roomPeerId } from './roomCode';
+import { PingMeter } from './sync';
 
 // ---------------------------------------------------------------------------
 // O mínimo da PeerJS que usamos (a de verdade ou uma falsa nos testes)
@@ -40,6 +43,8 @@ export interface ConnLike {
 
 export interface PeerLike {
   readonly destroyed: boolean;
+  /** Sem o servidor de sinalização (a PeerJS tenta voltar com `reconnect()`). */
+  readonly disconnected: boolean;
   on(event: 'open' | 'connection' | 'disconnected' | 'error', fn: Listener): unknown;
   connect(id: string, options: { reliable: boolean; serialization: string }): ConnLike;
   reconnect(): void;
@@ -79,15 +84,19 @@ export const NET_ERROR_TEXT: Readonly<Record<NetErrorKind, string>> = {
  * - waiting: (anfitrião) sala aberta, esperando o visitante;
  * - connecting: abrindo o canal e se apresentando;
  * - connected: pronto para jogar;
+ * - reconnecting: o canal caiu no meio do jogo; o visitante tenta voltar e o anfitrião espera (quem
+ *   decide desistir, depois de NET_WO_TIMEOUT, é a cena);
  * - failed: não deu (veja `error`); closed: encerrada.
  */
-export type SessionState = 'opening' | 'waiting' | 'connecting' | 'connected' | 'failed' | 'closed';
+export type SessionState = 'opening' | 'waiting' | 'connecting' | 'connected' | 'reconnecting' | 'failed' | 'closed';
 
 export type SessionEvent =
   | { kind: 'state'; state: SessionState }
   | { kind: 'message'; msg: NetMessage }
   /** O outro saiu ('quit') ou a conexão caiu ('dropped'). */
-  | { kind: 'remote-left'; reason: LeaveReason | 'dropped' };
+  | { kind: 'remote-left'; reason: LeaveReason | 'dropped' }
+  /** O canal voltou depois de uma queda. */
+  | { kind: 'reconnected' };
 
 /** Tipo do erro da PeerJS (`err.type`). */
 function errorType(err: unknown): string {
@@ -96,6 +105,8 @@ function errorType(err: unknown): string {
     : '';
 }
 
+type Hello = Extract<NetMessage, { type: 'hello' }>;
+
 export class NetSession {
   state: SessionState = 'opening';
   error: NetErrorKind | null = null;
@@ -103,10 +114,17 @@ export class NetSession {
   code: string;
   /** Token desta sessão (vai no `hello`). */
   readonly token: string;
+  /** Hora (ms, Date.now) da última mensagem recebida do outro. */
+  lastReceivedAt = 0;
   private peer: PeerLike | null = null;
   private conn: ConnLike | null = null;
+  /** (Anfitrião) token do visitante aceito: só ele volta depois de uma queda. */
+  private guestToken: string | null = null;
   private readonly listeners = new Set<(e: SessionEvent) => void>();
   private readonly timers = new Set<ReturnType<typeof setTimeout>>();
+  private pingTimer: ReturnType<typeof setInterval> | null = null;
+  private reconnectTimer: ReturnType<typeof setInterval> | null = null;
+  private readonly ping = new PingMeter();
   private invalidLogs = 0;
 
   private constructor(
@@ -133,6 +151,11 @@ export class NetSession {
     return s;
   }
 
+  /** Ping (ida e volta, ms), se já houver medida. */
+  get pingMs(): number | null {
+    return this.ping.ms;
+  }
+
   /** Ouve os acontecimentos da sessão. Devolve a função que para de ouvir. */
   listen(fn: (e: SessionEvent) => void): () => void {
     this.listeners.add(fn);
@@ -156,7 +179,7 @@ export class NetSession {
     const wasConnected = this.state === 'connected';
     if (wasConnected) this.send(message({ type: 'leave', reason }));
     this.setState('closed');
-    this.clearTimers();
+    this.stopLoops();
     this.listeners.clear();
     const conn = this.conn;
     const peer = this.peer;
@@ -197,7 +220,7 @@ export class NetSession {
   private fail(error: NetErrorKind): void {
     if (this.state === 'failed' || this.state === 'closed') return;
     this.error = error;
-    this.clearTimers();
+    this.stopLoops();
     this.setState('failed');
     const conn = this.conn;
     const peer = this.peer;
@@ -225,9 +248,17 @@ export class NetSession {
     this.timers.delete(id);
   }
 
-  private clearTimers(): void {
+  private stopLoops(): void {
     for (const id of this.timers) clearTimeout(id);
     this.timers.clear();
+    if (this.pingTimer !== null) clearInterval(this.pingTimer);
+    this.pingTimer = null;
+    this.stopReconnecting();
+  }
+
+  private stopReconnecting(): void {
+    if (this.reconnectTimer !== null) clearInterval(this.reconnectTimer);
+    this.reconnectTimer = null;
   }
 
   private async createPeer(id?: string): Promise<PeerLike | null> {
@@ -248,6 +279,26 @@ export class NetSession {
   /** Erros do servidor e da rede (fora os tratados à parte) → motivo. */
   private networkError(type: string): NetErrorKind {
     return type === 'browser-incompatible' ? 'unsupported' : 'unreachable';
+  }
+
+  /** Conectou (ou voltou): mede o ping a cada NET_PING_INTERVAL. */
+  private connected(): void {
+    this.stopReconnecting();
+    this.lastReceivedAt = Date.now();
+    const wasReconnecting = this.state === 'reconnecting';
+    this.setState('connected');
+    if (this.pingTimer === null) {
+      this.pingTimer = setInterval(() => this.send(message({ type: 'ping', t: Date.now(), reply: false })), NET_PING_INTERVAL * 1000);
+    }
+    if (wasReconnecting) this.emit({ kind: 'reconnected' });
+  }
+
+  /** O canal caiu no meio do jogo: avisa e espera (o visitante tenta voltar). */
+  private dropped(): void {
+    this.conn = null;
+    this.setState('reconnecting');
+    this.emit({ kind: 'remote-left', reason: 'dropped' });
+    if (this.role === 'guest') this.startReconnecting();
   }
 
   // --- anfitrião ------------------------------------------------------------
@@ -274,7 +325,7 @@ export class NetSession {
         return;
       }
       // Já jogando, o canal é direto: a falta do servidor de sinalização não atrapalha.
-      if (this.state === 'connected') return;
+      if (this.state === 'connected' || this.state === 'reconnecting') return;
       this.fail(this.networkError(type));
     });
     peer.on('disconnected', () => {
@@ -285,31 +336,63 @@ export class NetSession {
   }
 
   private acceptGuest(conn: ConnLike): void {
-    if (this.conn || this.state !== 'waiting') {
-      // Já tem visitante: avisa que a sala está cheia e fecha.
-      conn.on('open', () => {
-        try {
-          void conn.send(message({ type: 'leave', reason: 'full' }));
-        } catch {
-          // Já fechou.
-        }
-        setTimeout(() => conn.close(), NET_LEAVE_FLUSH * 1000);
-      });
+    // Esperando alguém, ou o visitante de antes voltando: apresenta-se e o `hello` decide.
+    const returning = this.guestToken !== null && (this.state === 'reconnecting' || this.state === 'connected');
+    if (!returning && (this.conn || this.state !== 'waiting')) {
+      this.refuse(conn);
       return;
     }
-    this.conn = conn;
-    this.setState('connecting');
+    if (!returning) {
+      this.conn = conn;
+      this.setState('connecting');
+    }
     const handshake = this.timer(NET_HANDSHAKE_TIMEOUT, () => {
-      // Abriu mas não se apresentou: volta a esperar outro.
-      if (this.state === 'connecting') this.dropGuest(conn);
+      // Abriu mas não se apresentou.
+      if (this.conn === conn && this.state === 'connecting') this.dropGuest(conn);
+      else if (returning && this.conn !== conn) conn.close();
     });
     conn.on('data', (data: unknown) => {
+      if (this.conn !== conn) {
+        // Voltando: só vale um `hello` com o token de quem estava jogando.
+        const hello = parseMessage(data);
+        if (hello?.type !== 'hello' || hello.session !== this.guestToken || !compatible(hello)) {
+          this.refuse(conn);
+          return;
+        }
+        this.clearTimer(handshake);
+        const old = this.conn;
+        this.conn = conn;
+        if (old) {
+          try {
+            old.close();
+          } catch {
+            // Já fechou.
+          }
+        }
+        this.send(message({ type: 'hello', game: GAME_VERSION, role: 'host', session: this.token }));
+        this.connected();
+        return;
+      }
       const before = this.state;
-      this.receive(data);
+      this.receive(data, conn);
       if (before === 'connecting' && this.state !== 'connecting') this.clearTimer(handshake);
     });
     conn.on('close', () => this.connectionClosed(conn));
     conn.on('error', (err: unknown) => console.warn('[online] erro na conexão:', err));
+  }
+
+  /** Sala ocupada: avisa "sala cheia" e fecha. */
+  private refuse(conn: ConnLike): void {
+    const bye = (): void => {
+      try {
+        void conn.send(message({ type: 'leave', reason: 'full' }));
+      } catch {
+        // Já fechou.
+      }
+      setTimeout(() => conn.close(), NET_LEAVE_FLUSH * 1000);
+    };
+    if (conn.open) bye();
+    else conn.on('open', bye);
   }
 
   /** O visitante caiu antes de se apresentar: a sala continua aberta. */
@@ -337,34 +420,74 @@ export class NetSession {
     peer.on('open', () => {
       if (this.state !== 'opening') return;
       this.setState('connecting');
-      const conn = peer.connect(roomPeerId(this.code), { reliable: true, serialization: 'json' });
-      this.conn = conn;
-      conn.on('open', () => this.send(message({ type: 'hello', game: GAME_VERSION, role: 'guest', session: this.token })));
-      conn.on('data', (data: unknown) => this.receive(data));
-      conn.on('close', () => this.connectionClosed(conn));
-      conn.on('error', (err: unknown) => console.warn('[online] erro na conexão:', err));
+      this.dial(peer);
     });
     peer.on('error', (err: unknown) => {
       const type = errorType(err);
       console.warn('[online] erro da PeerJS:', type || err);
-      if (this.state === 'connected') return;
+      // Voltando de uma queda, os erros de cada tentativa não encerram nada (a cena decide o W.O.).
+      if (this.state === 'connected' || this.state === 'reconnecting') return;
       this.fail(type === 'peer-unavailable' ? 'not-found' : this.networkError(type));
     });
     peer.on('disconnected', () => {
-      if (this.peer === peer && !peer.destroyed && this.state === 'connected') peer.reconnect();
+      if (this.peer === peer && !peer.destroyed && (this.state === 'connected' || this.state === 'reconnecting')) peer.reconnect();
     });
+  }
+
+  /** Abre um canal com o anfitrião e se apresenta quando abrir. */
+  private dial(peer: PeerLike): void {
+    const conn = peer.connect(roomPeerId(this.code), { reliable: true, serialization: 'json' });
+    this.conn = conn;
+    conn.on('open', () => {
+      if (this.conn === conn) this.send(message({ type: 'hello', game: GAME_VERSION, role: 'guest', session: this.token }));
+    });
+    conn.on('data', (data: unknown) => this.receive(data, conn));
+    conn.on('close', () => this.connectionClosed(conn));
+    conn.on('error', (err: unknown) => console.warn('[online] erro na conexão:', err));
+  }
+
+  /** Depois de uma queda: tenta um canal novo a cada NET_RECONNECT_INTERVAL. */
+  private startReconnecting(): void {
+    this.stopReconnecting();
+    const attempt = (): void => {
+      const peer = this.peer;
+      if (!peer || peer.destroyed || this.state !== 'reconnecting') {
+        this.stopReconnecting();
+        return;
+      }
+      if (peer.disconnected) peer.reconnect();
+      const old = this.conn;
+      this.conn = null;
+      if (old) {
+        try {
+          old.close();
+        } catch {
+          // Já fechou.
+        }
+      }
+      this.dial(peer);
+    };
+    this.reconnectTimer = setInterval(attempt, NET_RECONNECT_INTERVAL * 1000);
+    attempt();
   }
 
   // --- mensagens ------------------------------------------------------------
 
-  private receive(data: unknown): void {
+  private receive(data: unknown, conn: ConnLike): void {
+    if (conn !== this.conn) return;
     const msg = parseMessage(data);
     if (!msg) {
       if (this.invalidLogs++ < NET_MAX_INVALID_LOGS) console.warn('[online] mensagem inválida ignorada:', data);
       return;
     }
+    this.lastReceivedAt = Date.now();
     if (msg.type === 'hello') {
       this.handshake(msg);
+      return;
+    }
+    if (msg.type === 'ping') {
+      if (msg.reply) this.ping.sample(msg.t, Date.now());
+      else this.send(message({ type: 'ping', t: msg.t, reply: true }));
       return;
     }
     if (msg.type === 'leave') {
@@ -387,28 +510,35 @@ export class NetSession {
     this.emit({ kind: 'message', msg });
   }
 
-  private handshake(hello: Extract<NetMessage, { type: 'hello' }>): void {
-    if (this.state !== 'connecting') return;
+  private handshake(hello: Hello): void {
+    if (this.state !== 'connecting' && this.state !== 'reconnecting') return;
     const expected: NetRole = this.role === 'host' ? 'guest' : 'host';
     if (hello.role !== expected) return;
     if (!compatible(hello)) {
       this.send(message({ type: 'leave', reason: 'version' }));
+      this.stopLoops();
       // Deixa o aviso chegar antes de fechar.
       setTimeout(() => this.fail('version'), NET_LEAVE_FLUSH * 1000);
-      this.clearTimers();
       return;
     }
-    if (this.role === 'host') this.send(message({ type: 'hello', game: GAME_VERSION, role: 'host', session: this.token }));
-    this.clearTimers();
-    this.setState('connected');
+    if (this.role === 'host') {
+      this.guestToken = hello.session;
+      this.send(message({ type: 'hello', game: GAME_VERSION, role: 'host', session: this.token }));
+    }
+    for (const id of this.timers) clearTimeout(id);
+    this.timers.clear();
+    this.connected();
   }
 
   private connectionClosed(conn: ConnLike): void {
     if (this.conn !== conn) return;
     if (this.state === 'connected') {
+      this.dropped();
+      return;
+    }
+    if (this.state === 'reconnecting') {
+      // Uma tentativa de voltar que não deu: a próxima vem pelo intervalo.
       this.conn = null;
-      this.emit({ kind: 'remote-left', reason: 'dropped' });
-      this.close();
       return;
     }
     if (this.role === 'host') this.dropGuest(conn);

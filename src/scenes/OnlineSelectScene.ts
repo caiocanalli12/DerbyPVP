@@ -13,11 +13,12 @@ import { Rng } from '../core/rng';
 import { TEAMS } from '../data/teams';
 import type { TeamId } from '../data/teams';
 import { randomWeather } from '../data/weather';
+import type { WeatherId } from '../data/weather';
+import type { VersusData } from './VersusScene';
 import { crestKey, generateCrestTextures } from '../art/crest-art';
 import { generateKitPreview, previewKey } from '../art/preview-art';
 import { CREAM, CREAM_CSS, FONT_TEXT, FONT_TITLE, INK, INK_CSS } from '../art/style';
 import { FilmView, filmEffectsEnabled } from '../render/FilmView';
-import { IntertitleView } from '../render/IntertitleView';
 import { addSunburst, addTitle, ConfirmDialog, NoticeDialog, readMenuInput } from '../render/menu';
 import { currentSession, setCurrentSession } from '../net/peer';
 import type { NetSession, SessionEvent } from '../net/peer';
@@ -67,7 +68,6 @@ export class OnlineSelectScene extends Phaser.Scene {
   private film!: FilmView;
   private confirm: ConfirmDialog | null = null;
   private notice: NoticeDialog | null = null;
-  private card: IntertitleView | null = null;
   private readySince: number | null = null;
   private started = false;
   private leaving = false;
@@ -82,7 +82,6 @@ export class OnlineSelectScene extends Phaser.Scene {
     this.readySince = null;
     this.confirm = null;
     this.notice = null;
-    this.card = null;
     const s = currentSession();
     this.session = s && s.state === 'connected' ? s : null;
     this.me = this.session?.role === 'guest' ? 1 : 0;
@@ -106,7 +105,6 @@ export class OnlineSelectScene extends Phaser.Scene {
       this.off?.();
       this.off = null;
       this.film.destroy();
-      this.card?.destroy();
     });
     readMenuInput();
     this.refresh();
@@ -224,7 +222,7 @@ export class OnlineSelectScene extends Phaser.Scene {
       this.states[other] = { index, confirmed: msg.confirmed };
       this.refresh();
     } else if (msg.type === 'start' && this.me === 1 && !this.started) {
-      this.begin(msg.teams, msg.seed);
+      this.begin(msg.teams, msg.seed, msg.weather);
     }
   }
 
@@ -235,10 +233,15 @@ export class OnlineSelectScene extends Phaser.Scene {
     this.notice = new NoticeDialog(this, 'O ADVERSÁRIO SAIU', 'A conexão com a sala acabou.', 'VOLTAR');
   }
 
-  /** Os dois confirmaram: segue para a partida (a partida online chega na próxima fase). */
-  private begin(_teams: [TeamId, TeamId], _seed: number): void {
+  /** Os dois confirmaram: segue para a tela VS e a partida (com o clima e a semente do anfitrião). */
+  private begin(teams: [TeamId, TeamId], seed: number, weather: WeatherId): void {
     this.started = true;
-    this.card = new IntertitleView(this, 30);
+    this.leaving = true;
+    this.off?.();
+    this.off = null;
+    const data: VersusData = { teams, seed, weather, mode: 'online' };
+    this.cameras.main.fadeOut(220, 20, 12, 8);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start('VersusScene', data));
   }
 
   override update(time: number): void {
@@ -249,16 +252,11 @@ export class OnlineSelectScene extends Phaser.Scene {
     this.confirm?.update(t);
     this.notice?.update(t);
     this.animate(t);
-    if (this.card) this.card.update('TUDO PRONTO!\nA PARTIDA ONLINE CHEGA NA PRÓXIMA VERSÃO', t);
     if (this.leaving) return;
     const input = readMenuInput();
 
     if (this.notice) {
       if (this.notice.handle(input)) this.leave();
-      return;
-    }
-    if (this.card) {
-      if (input.enter || input.players.some((p) => p.confirm || p.back)) this.leave();
       return;
     }
     if (this.confirm) {
@@ -318,7 +316,7 @@ export class OnlineSelectScene extends Phaser.Scene {
         const weather = randomWeather(() => rng.next());
         const teams: [TeamId, TeamId] = [this.teamOf(0), this.teamOf(1)];
         this.session?.send(message({ type: 'start', teams, weather, seed }));
-        this.begin(teams, seed);
+        this.begin(teams, seed, weather);
       }
     } else {
       this.readySince = null;

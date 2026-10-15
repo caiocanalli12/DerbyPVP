@@ -9,6 +9,8 @@ import { isTeamId } from '../data/teams';
 import type { TeamId } from '../data/teams';
 import { isWeatherId } from '../data/weather';
 import type { WeatherId } from '../data/weather';
+import { parseSnapshotBody } from './snapshot';
+import type { SnapshotMessage } from './snapshot';
 
 /** Versão do protocolo (muda quando o formato das mensagens muda). */
 export const PROTOCOL_VERSION = 1;
@@ -37,7 +39,30 @@ export type NetMessage =
   /** Saiu da sala. */
   | { type: 'leave'; v: number; reason: LeaveReason }
   /** Medida de ping: `t` é o relógio de quem mandou; a resposta devolve o mesmo `t`. */
-  | { type: 'ping'; v: number; t: number; reply: boolean };
+  | { type: 'ping'; v: number; t: number; reply: boolean }
+  /** Visitante → anfitrião, a cada tick (ver `net/inputs.ts`). */
+  | InputMessage
+  /** Anfitrião → visitante, a 30 Hz (ver `net/snapshot.ts`). */
+  | SnapshotMessage;
+
+/**
+ * Comando do visitante num tick: direção (`mx`, `my`), chute preso (`held`), mira do pênalti
+ * (`aim`) e os contadores acumulados de passe (`pass`), "apertou o chute" (`sp`) e "soltou o
+ * chute" (`sr`). `seq` cresce a cada mensagem; `tick` é o tick do visitante.
+ */
+export interface InputMessage {
+  type: 'input';
+  v: number;
+  seq: number;
+  tick: number;
+  mx: number;
+  my: number;
+  held: boolean;
+  aim: -1 | 0 | 1;
+  pass: number;
+  sp: number;
+  sr: number;
+}
 
 export type NetMessageType = NetMessage['type'];
 
@@ -47,6 +72,7 @@ const isObj = (x: unknown): x is Obj => typeof x === 'object' && x !== null && !
 const isText = (x: unknown): x is string => typeof x === 'string' && x.length > 0 && x.length <= MAX_TEXT;
 const isUint32 = (x: unknown): x is number => typeof x === 'number' && Number.isInteger(x) && x >= 0 && x <= 0xffffffff;
 const isTeam = (x: unknown): x is TeamId => typeof x === 'string' && isTeamId(x);
+const isUnit = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x) && x >= -1 && x <= 1;
 
 /** Valida uma mensagem recebida. Devolve a mensagem (só com os campos conhecidos) ou null. */
 export function parseMessage(data: unknown): NetMessage | null {
@@ -79,6 +105,15 @@ export function parseMessage(data: unknown): NetMessage | null {
     case 'ping':
       if (typeof data.t !== 'number' || !Number.isFinite(data.t) || data.t < 0 || typeof data.reply !== 'boolean') return null;
       return { type: 'ping', v, t: data.t, reply: data.reply };
+    case 'input': {
+      const { seq, tick, mx, my, held, aim, pass, sp, sr } = data;
+      if (!isUint32(seq) || !isUint32(tick) || !isUint32(pass) || !isUint32(sp) || !isUint32(sr)) return null;
+      if (!isUnit(mx) || !isUnit(my) || Math.hypot(mx, my) > 1.01) return null;
+      if (typeof held !== 'boolean' || (aim !== -1 && aim !== 0 && aim !== 1)) return null;
+      return { type: 'input', v, seq, tick, mx, my, held, aim, pass, sp, sr };
+    }
+    case 'snapshot':
+      return parseSnapshotBody(data, v);
     default:
       return null;
   }
