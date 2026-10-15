@@ -16,7 +16,7 @@ import type { MenuInput } from '../render/menu';
 import { Rng } from '../core/rng';
 import { randomWeather } from '../data/weather';
 import type { WeatherId } from '../data/weather';
-import { currentSession, setCurrentSession } from '../net/peer';
+import { currentSession, myOnlineSide, setCurrentSession } from '../net/peer';
 import type { NetSession, SessionEvent } from '../net/peer';
 import { message } from '../net/protocol';
 import type { VersusData } from './VersusScene';
@@ -121,7 +121,7 @@ export class ResultScene extends Phaser.Scene {
       .text(textX, 300, 'VENCEDOR', { fontFamily: FONT_TEXT, fontSize: '28px', fontStyle: '700', color: CREAM_CSS, stroke: INK_CSS, strokeThickness: 5 })
       .setOrigin(0.5);
     this.add
-      .text(textX, 396, sideLabel(d.mode, d.winner), { fontFamily: FONT_TEXT, fontSize: '20px', color: CREAM_CSS, stroke: INK_CSS, strokeThickness: 4 })
+      .text(textX, 396, sideLabel(d.mode, d.winner, myOnlineSide()), { fontFamily: FONT_TEXT, fontSize: '20px', color: CREAM_CSS, stroke: INK_CSS, strokeThickness: 4 })
       .setOrigin(0.5);
 
     // A torcida do vencedor comemorando (mesmas texturas da partida).

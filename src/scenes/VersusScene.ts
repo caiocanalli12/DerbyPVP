@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH, VERSUS_DURATION } from '../config/constants';
 import { Rng } from '../core/rng';
 import { sideLabel } from '../core/modes';
+import { myOnlineSide } from '../net/peer';
 import type { GameMode } from '../core/modes';
 import { audio } from '../audio/AudioManager';
 import { getTeam } from '../data/teams';
@@ -125,7 +126,7 @@ export class VersusScene extends Phaser.Scene {
         .setAlpha(0);
       this.names.push(name);
       this.add
-        .text(name.x, name.y + 40, sideLabel(this.config.mode, i === 0 ? 0 : 1), { fontFamily: FONT_TEXT, fontSize: '20px', color: CREAM_CSS })
+        .text(name.x, name.y + 40, sideLabel(this.config.mode, i === 0 ? 0 : 1, myOnlineSide()), { fontFamily: FONT_TEXT, fontSize: '20px', color: CREAM_CSS })
         .setOrigin(0.5)
         .setDepth(6);
     }

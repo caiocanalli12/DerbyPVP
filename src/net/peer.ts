@@ -556,6 +556,11 @@ export function currentSession(): NetSession | null {
   return current;
 }
 
+/** Lado de quem está jogando aqui no online (anfitrião = 0, visitante = 1), se houver sessão. */
+export function myOnlineSide(): 0 | 1 | undefined {
+  return current ? (current.role === 'host' ? 0 : 1) : undefined;
+}
+
 /** Troca a sessão em uso (a anterior é encerrada). */
 export function setCurrentSession(s: NetSession | null): void {
   if (current && current !== s) current.close();

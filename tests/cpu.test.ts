@@ -88,6 +88,9 @@ describe('níveis do CPU', () => {
     expect(sideLabel('solo', 0)).toBe('JOGADOR 1');
     expect(sideLabel('solo', 1)).toBe('COMPUTADOR');
     expect(sideLabel('local', 1)).toBe('JOGADOR 2');
+    expect(sideLabel('online', 1, 1)).toBe('VOCÊ');
+    expect(sideLabel('online', 0, 1)).toBe('ADVERSÁRIO');
+    expect(sideLabel('online', 0)).toBe('JOGADOR 1');
   });
 
   it('criar o CPU só liga as infiltrações dos companheiros (nada de velocidade, física ou goleiro)', () => {
